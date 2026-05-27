@@ -1,0 +1,17 @@
+export const FLASH_NEWS: Record<string, string> = {
+    "NEWS_01": "🌾 Pongal Celebration: Traditional lunch and ethnic wear day this Friday!",
+    "NEWS_02": "🚀 Project Milestone: Successful software delivery to Client X completed ahead of schedule.",
+    "NEWS_03": "🏆 Team Spotlight: Recognition for the QA team for zero-bug deployment this week.",
+    "NEWS_04": "💡 Innovation Hub: Submissions for the next Hackathon are now open.",
+    "NEWS_05": "☕ Coffee Break: Join us at 4 PM for a quick catch-up in the cafeteria.",
+    "NEWS_06": "📈 Business Update: Company hits Q1 growth targets thanks to everyone's hard work.",
+    "NEWS_07": "💻 Tech Talk: Deep dive into the new Microservices architecture this Wednesday.",
+    "NEWS_08": "🎉 New Beginnings: Warm welcome to the 5 new joiners starting in the Dev team today.",
+    "NEWS_09": "🎂 Happy Birthday: Celebrating all our team members born in the month of March!",
+    "NEWS_10": "🌟 Client Feedback: 'Exceptional service and timely delivery'—kudos to the Support team.",
+    "NEWS_11": "🌳 Sustainability Drive: Join our 'Go Green' initiative—office-wide plastic-free week.",
+    "NEWS_12": "🛡️ Security Alert: Reminder to update your passwords and complete the MFA setup.",
+    "NEWS_13": "🏅 Certification: Congrats to our DevOps lead for achieving the AWS Professional certification.",
+    "NEWS_14": "📣 Town Hall: CEO Monthly Briefing scheduled for Friday at 11 AM via Video Call.",
+    "NEWS_15": "🍯 Festive Vibes: Sweets being distributed at the reception for the upcoming holiday!",
+};

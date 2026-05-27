@@ -1,0 +1,36 @@
+export const DAILY_MOTIVATION: Record<string, string> = {
+    "M01": "Quality is not an act, it is a habit.",
+    "M02": "The only way to do great work is to love what you do.",
+    "M03": "Big results require small, consistent efforts every single day.",
+    "M04": "Individually we are one drop; together we are an ocean.",
+    "M05": "Don’t count the days, make the days count.",
+    "M06": "Innovation distinguishes between a leader and a follower.",
+    "M07": "Your talent determines what you can do. Your motivation determines how much you are willing to do.",
+    "M08": "The secret of getting ahead is getting started.",
+    "M09": "Hard work beats talent when talent doesn’t work hard.",
+    "M10": "Action is the foundational key to all success.",
+    "M11": "Focus on being productive instead of busy.",
+    "M12": "Efficiency is doing things right; effectiveness is doing the right things.",
+    "M13": "Success is the sum of small efforts, repeated day in and day out.",
+    "M14": "The best way to predict the future is to create it.",
+    "M15": "Opportunities are usually disguised as hard work, so most people don't recognize them.",
+    "M16": "Growth and comfort do not coexist.",
+    "M17": "Every problem is a gift—without problems we would not grow.",
+    "M18": "The power of imagination makes us infinite.",
+    "M19": "Don't be afraid to give up the good to go for the great.",
+    "M20": "Your direction is more important than your speed.",
+    "M21": "If you want to go fast, go alone. If you want to go far, go together.",
+    "M22": "A year from now you may wish you had started today.",
+    "M23": "Excellence is not a destination; it is a continuous journey.",
+    "M24": "Motivation is what gets you started. Habit is what keeps you going.",
+    "M25": "Challenges are what make life interesting and overcoming them is what makes life meaningful.",
+    "M26": "The expert in anything was once a beginner.",
+    "M27": "Great things are done by a series of small things brought together.",
+    "M28": "Limit your 'always' and your 'nevers'.",
+    "M29": "Focus on the solution, not the obstacle.",
+    "M30": "Small wins lead to giant leaps.",
+};
+
+
+
+
