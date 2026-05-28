@@ -1,9 +1,8 @@
 import { attendanceService } from "@/features/attendance/services/attendanceService";
 import type { AdminAttendanceExportRequest, AttendanceExportRequest, AttendanceRecord, TeamCalendarResponse } from "@/features/attendance/types";
+import { permissionService } from "@/features/leave/services/permissionService";
 import { wfhService } from "@/features/leave/services/wfhService";
 import { useCallback, useState } from "react";
-
-
 
 export const useCalendar = () => {
   const [loading, setLoading] = useState(false);
@@ -12,29 +11,60 @@ export const useCalendar = () => {
   const [allEmployeesAttendanceReport, setAllEmployeesAttendanceReport] = useState<AttendanceRecord[]>([]);
   const [pagination, setPagination] = useState({ totalPages: 0, totalElements: 0, currentPage: 0 });
   const [attendanceReport, setAttendanceReport] = useState<AttendanceRecord[]>([]);
-
-  const [teamCalendar, setTeamCalendar] =
-    useState<TeamCalendarResponse>({});
-
-  const [employeeCalendar, setEmployeeCalendar] =
-    useState<TeamCalendarResponse>({});
-
+  const [teamCalendar, setTeamCalendar] = useState<TeamCalendarResponse>({});
+  const [employeeCalendar, setEmployeeCalendar] = useState<TeamCalendarResponse>({});
   const [attendance, setAttendance] = useState<Record<string, AttendanceRecord>>({});
+
+  // ── Helper: expand a WFH record across its date range ────────────
+  const expandWfhIntoCalendar = (
+    cal: TeamCalendarResponse,
+    wfh: any
+  ): TeamCalendarResponse => {
+    if (!wfh.startDate || !wfh.endDate) return cal;
+    const result = { ...cal };
+    const start  = new Date(wfh.startDate + "T00:00:00");
+    const end    = new Date(wfh.endDate   + "T00:00:00");
+    const cursor = new Date(start);
+
+    while (cursor <= end) {
+      const yyyy = cursor.getFullYear();
+      const mm   = String(cursor.getMonth() + 1).padStart(2, "0");
+      const dd   = String(cursor.getDate()).padStart(2, "0");
+      const key  = `${yyyy}-${mm}-${dd}`;
+
+      const entry = {
+        id:             wfh.id,
+        leaveTypeName:  "WFH",
+        status:         wfh.status,
+        startDate:      wfh.startDate,
+        endDate:        wfh.endDate,
+        employeeId:     wfh.employeeId,
+        employeeName:   wfh.employeeName,
+        reason:         wfh.reason,
+        days:           wfh.totalDays,
+        isWfh:          true,
+      };
+
+      result[key] = result[key] ? [...result[key], entry as any] : [entry as any];
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return result;
+  };
+
   /*
   ========================
   TEAM LEAVE CALENDAR
+  — backend now returns WFH entries too (after patch).
+    Frontend also fetches team members' WFH as fallback.
   ========================
   */
   const fetchTeamSchedule = useCallback(
     async (employeeId: string) => {
       try {
         setLoading(true);
-
-        const data =
-          await attendanceService.getTeamCalendar(employeeId);
-
+        // Backend already merges WFH for us after the DashboardService patch
+        const data = await attendanceService.getTeamCalendar(employeeId);
         setTeamCalendar(data || {});
-
         return data;
       } catch (err) {
         console.error("team calendar error", err);
@@ -52,54 +82,19 @@ export const useCalendar = () => {
   MY LEAVE CALENDAR (with WFH merged in)
   ========================
   */
+  // ✅ AFTER (clean — backend handles everything):
   const fetchEmployeeCalendar = useCallback(
     async (employeeId: string) => {
       try {
         setLoading(true);
-
-        const [leaveData, wfhData] = await Promise.all([
-          attendanceService.getEmployeeCalendar(employeeId),
-          wfhService.getMyApplications(employeeId).catch(() => []),
-        ]);
-
-        // Merge WFH records into the calendar map
+  
+        // Backend now returns leave + WFH + PERMISSION (APPROVED+PENDING only)
+        // No need to fetch permissions separately — removed to prevent duplicates
+        const leaveData = await attendanceService.getEmployeeCalendar(employeeId);
+  
+        // Backend already merges leave + WFH + permissions
         const merged: TeamCalendarResponse = { ...(leaveData || {}) };
-
-        (wfhData || []).forEach((wfh: any) => {
-          if (!wfh.startDate || !wfh.endDate) return;
-
-          // Expand date range for multi-day WFH
-          const start = new Date(wfh.startDate);
-          const end = new Date(wfh.endDate);
-          const cursor = new Date(start);
-
-          while (cursor <= end) {
-            const yyyy = cursor.getFullYear();
-            const mm = String(cursor.getMonth() + 1).padStart(2, "0");
-            const dd = String(cursor.getDate()).padStart(2, "0");
-            const key = `${yyyy}-${mm}-${dd}`;
-
-            const wfhEntry = {
-              leaveTypeName: "WFH",
-              status: wfh.status,
-              startDate: wfh.startDate,
-              endDate: wfh.endDate,
-              employeeId: wfh.employeeId,
-              employeeName: wfh.employeeName,
-              id: wfh.id,
-              isWfh: true,
-            };
-
-            if (!merged[key]) {
-              merged[key] = [wfhEntry as any];
-            } else {
-              merged[key] = [...merged[key], wfhEntry as any];
-            }
-
-            cursor.setDate(cursor.getDate() + 1);
-          }
-        });
-
+  
         setEmployeeCalendar(merged);
       } catch (err: any) {
         console.error("employee calendar error", err);
@@ -110,14 +105,11 @@ export const useCalendar = () => {
     },
     []
   );
-
   /*
   ========================
   ATTENDANCE CALENDAR
   ========================
   */
-  // In your component
-
   const fetchAttendanceCalendar = useCallback(
     async (employeeId: string, year: number, month: number) => {
       try {
@@ -126,7 +118,6 @@ export const useCalendar = () => {
 
         const data: AttendanceRecord[] = await attendanceService.getAttendance(employeeId, year, month);
 
-        // Transform Array -> Object { "2026-04-11": Record }
         const attendanceMap = data.reduce((acc, record) => {
           acc[record.date] = record;
           return acc;
@@ -142,6 +133,7 @@ export const useCalendar = () => {
     },
     []
   );
+
   const fetchTeamAttendanceReport = useCallback(
     async (reportingId: string, filters: { fromDate?: string; toDate?: string; status?: string; page?: number; size?: number }) => {
       try {
@@ -177,12 +169,11 @@ export const useCalendar = () => {
 
         const data = await attendanceService.getEmployeeAttendanceByRange(empId, filters);
 
-
         setAttendanceReport(data.content || []);
         setPagination({
           totalPages: data.totalPages,
           totalElements: data.totalElements,
-          currentPage: filters.page || 0 ,
+          currentPage: filters.page || 0,
         });
 
         return data;
@@ -196,6 +187,7 @@ export const useCalendar = () => {
     },
     []
   );
+
   const fetchAllEmployeeAttendanceReport = useCallback(
     async (filters: { fromDate?: string; toDate?: string; page?: number; size?: number }) => {
       try {
@@ -222,6 +214,7 @@ export const useCalendar = () => {
     },
     []
   );
+
   const downloadAttendanceExcel = useCallback(
     async (empId: string, filters: { fromDate?: string; toDate?: string }) => {
       try {
@@ -269,6 +262,7 @@ export const useCalendar = () => {
     },
     []
   );
+
   const downloadAllAttendanceReport = useCallback(
     async (payload: AdminAttendanceExportRequest) => {
       try {
@@ -284,15 +278,10 @@ export const useCalendar = () => {
     },
     []
   );
-  /*
-  ========================
-  EXPORT API
-  ========================
-  */
+
   return {
     loading,
     error,
-
     teamCalendar,
     employeeCalendar,
     attendance,

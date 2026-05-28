@@ -1,6 +1,14 @@
 import MyDatePicker from "@/shared/components/datepicker/MyDatePicker";
 import { useAuth } from "@/shared/auth/useAuth";
 import React, { useEffect, useRef, useState } from "react";
+
+// Maximum days in the past that WFH can be back-dated (must match backend MAX_BACKDATE_DAYS)
+const MAX_BACKDATE_DAYS = 31;
+const getMinAllowedDate = (): Date => {
+  const d = new Date();
+  d.setDate(d.getDate() - MAX_BACKDATE_DAYS);
+  return d;
+};
 import {
   HiOutlineCheckCircle,
   HiOutlineHome,
@@ -214,7 +222,7 @@ const WfhRequestForm: React.FC = () => {
             <HiOutlineHome className="text-indigo-600" /> Work From Home Application
           </h1>
           <p className="text-[10px] text-slate-400 font-medium mt-0.5 ml-6">
-            No day limit · Requires manager approval
+            No day limit · Backdating up to 31 days · Future dates allowed · Requires manager approval
           </p>
         </div>
 
@@ -258,7 +266,8 @@ const WfhRequestForm: React.FC = () => {
               label="WFH Starts On"
               selected={formData.startDate}
               onChange={handleStartDateChange}
-              minDate={new Date()}
+              minDate={getMinAllowedDate()}
+              
               required
             />
             {formData.startDate && (
@@ -275,7 +284,8 @@ const WfhRequestForm: React.FC = () => {
               label="WFH Ends On"
               selected={formData.endDate}
               onChange={handleEndDateChange}
-              minDate={formData.startDate ?? new Date()}
+              minDate={formData.startDate ?? getMinAllowedDate()}
+              
               required
             />
             {formData.endDate &&
