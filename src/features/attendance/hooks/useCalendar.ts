@@ -1,7 +1,5 @@
 import { attendanceService } from "@/features/attendance/services/attendanceService";
 import type { AdminAttendanceExportRequest, AttendanceExportRequest, AttendanceRecord, TeamCalendarResponse } from "@/features/attendance/types";
-import { permissionService } from "@/features/leave/services/permissionService";
-import { wfhService } from "@/features/leave/services/wfhService";
 import { useCallback, useState } from "react";
 
 export const useCalendar = () => {
@@ -16,40 +14,40 @@ export const useCalendar = () => {
   const [attendance, setAttendance] = useState<Record<string, AttendanceRecord>>({});
 
   // ── Helper: expand a WFH record across its date range ────────────
-  const expandWfhIntoCalendar = (
-    cal: TeamCalendarResponse,
-    wfh: any
-  ): TeamCalendarResponse => {
-    if (!wfh.startDate || !wfh.endDate) return cal;
-    const result = { ...cal };
-    const start  = new Date(wfh.startDate + "T00:00:00");
-    const end    = new Date(wfh.endDate   + "T00:00:00");
-    const cursor = new Date(start);
+  // const expandWfhIntoCalendar = (
+  //   cal: TeamCalendarResponse,
+  //   wfh: any
+  // ): TeamCalendarResponse => {
+  //   if (!wfh.startDate || !wfh.endDate) return cal;
+  //   const result = { ...cal };
+  //   const start  = new Date(wfh.startDate + "T00:00:00");
+  //   const end    = new Date(wfh.endDate   + "T00:00:00");
+  //   const cursor = new Date(start);
 
-    while (cursor <= end) {
-      const yyyy = cursor.getFullYear();
-      const mm   = String(cursor.getMonth() + 1).padStart(2, "0");
-      const dd   = String(cursor.getDate()).padStart(2, "0");
-      const key  = `${yyyy}-${mm}-${dd}`;
+  //   while (cursor <= end) {
+  //     const yyyy = cursor.getFullYear();
+  //     const mm   = String(cursor.getMonth() + 1).padStart(2, "0");
+  //     const dd   = String(cursor.getDate()).padStart(2, "0");
+  //     const key  = `${yyyy}-${mm}-${dd}`;
 
-      const entry = {
-        id:             wfh.id,
-        leaveTypeName:  "WFH",
-        status:         wfh.status,
-        startDate:      wfh.startDate,
-        endDate:        wfh.endDate,
-        employeeId:     wfh.employeeId,
-        employeeName:   wfh.employeeName,
-        reason:         wfh.reason,
-        days:           wfh.totalDays,
-        isWfh:          true,
-      };
+  //     const entry = {
+  //       id:             wfh.id,
+  //       leaveTypeName:  "WFH",
+  //       status:         wfh.status,
+  //       startDate:      wfh.startDate,
+  //       endDate:        wfh.endDate,
+  //       employeeId:     wfh.employeeId,
+  //       employeeName:   wfh.employeeName,
+  //       reason:         wfh.reason,
+  //       days:           wfh.totalDays,
+  //       isWfh:          true,
+  //     };
 
-      result[key] = result[key] ? [...result[key], entry as any] : [entry as any];
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    return result;
-  };
+  //     result[key] = result[key] ? [...result[key], entry as any] : [entry as any];
+  //     cursor.setDate(cursor.getDate() + 1);
+  //   }
+  //   return result;
+  // };
 
   /*
   ========================
