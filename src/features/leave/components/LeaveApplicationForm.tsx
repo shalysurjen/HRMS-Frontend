@@ -14,6 +14,7 @@ import {
   HiOutlineShieldCheck,
 } from "react-icons/hi2";
 import { toLocalISOString } from "../../../shared/utils/dateUtils";
+import { leaveService } from "@/features/leave/services/leaveService";
 
 type HalfDayType = "FIRST_HALF" | "SECOND_HALF" | null;
 
@@ -56,6 +57,16 @@ const LeaveApplicationForm = () => {
     if (e.target.files && e.target.files[0]) setSelectedFile(e.target.files[0]);
   };
 
+  // ── Date bounds for SICK / ANNUAL (±31 days from today) ──────────────────
+  const isSickOrAnnual = formData.leaveTypeName === "SICK" || formData.leaveTypeName === "ANNUAL";
+  const minAllowed = isSickOrAnnual
+    ? (() => { const d = new Date(); d.setDate(d.getDate() - 31); d.setHours(0, 0, 0, 0); return d; })()
+    : undefined;
+  const maxAllowed = isSickOrAnnual
+    ? (() => { const d = new Date(); d.setDate(d.getDate() + 31); d.setHours(23, 59, 59, 999); return d; })()
+    : undefined;
+  // ──────────────────────────────────────────────────────────────────────────
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -70,6 +81,33 @@ const LeaveApplicationForm = () => {
       setError("User session not found.");
       return;
     }
+
+    // ── Sick → Annual consecutive check ───────────────────────────
+    if (formData.leaveTypeName === "ANNUAL" && formData.startDate) {
+      try {
+        const history = await leaveService.getMyLeaveHistory(employeeId);
+        const prevDay = new Date(formData.startDate);
+        prevDay.setDate(prevDay.getDate() - 1);
+        const prevDayStr = prevDay.toISOString().split("T")[0];
+
+        const hasAdjacentSick = history.some((leave: any) => {
+          const isApprovedSick =
+            (leave.leaveTypeName === "SICK" || leave.type === "SICK") &&
+            (leave.status === "APPROVED" || leave.status === "PENDING");
+          if (!isApprovedSick) return false;
+          const leaveEnd = leave.endDate?.split("T")[0] || leave.endDate;
+          return leaveEnd === prevDayStr;
+        });
+
+        if (hasAdjacentSick) {
+          setError("Annual Leave cannot be applied immediately after a Sick Leave. Please leave at least one working day gap.");
+          return;
+        }
+      } catch {
+        // If history check fails, let backend handle it
+      }
+    }
+    // ─────────────────────────────────────────────────────────────
 
     if (formData.leaveTypeName === "COMP_OFF") {
       if (!formData.compOffPlannedDate) {
@@ -92,13 +130,11 @@ const LeaveApplicationForm = () => {
 
     const fd = new FormData();
     fd.append("employeeId", employeeId);
-
     fd.append("leaveTypeName", formData.leaveTypeName);
     fd.append("startDate", toLocalISOString(formData.startDate));
 
     const isFutureDate = formData.startDate ? new Date(formData.startDate).setHours(0, 0, 0, 0) > new Date().setHours(0, 0, 0, 0) : false;
     const isAppointment = formData.leaveTypeName === "SICK" && isFutureDate && formData.isAppointment;
-
     fd.append("isAppointment", isAppointment.toString());
 
     const endDateStr = formData.isHalfDay
@@ -127,48 +163,24 @@ const LeaveApplicationForm = () => {
     if (result) setSubmitted(true);
   };
 
-  // const calculateDays = () => {
-  //   if (!formData.startDate) return 0;
-  //   if (formData.isHalfDay || formData.leaveTypeName === "COMP_OFF") return formData.startDateHalfDayType ? 0.5 : 1;
-  //   if (!formData.endDate) return 1;
-
-  //   const start = new Date(formData.startDate);
-  //   const end = new Date(formData.endDate);
-  //   const diffTime = Math.abs(end.getTime() - start.getTime());
-  //   let days = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-
-  //   if (formData.startDateHalfDayType) days -= 0.5;
-  //   if (formData.endDateHalfDayType) days -= 0.5;
-  //   return days;
-  // };
-
   const getAvailableLeaveTypes = () => {
     const types = ["SICK", "ANNUAL"];
-
     const gender = user?.gender?.toUpperCase();
-
     if (user?.maritalStatus === "MARRIED") {
-      if (gender === "MALE") {
-        types.push("PATERNITY");
-      } else if (gender === "FEMALE") {
-        types.push("MATERNITY");
-      }
+      if (gender === "MALE") types.push("PATERNITY");
+      else if (gender === "FEMALE") types.push("MATERNITY");
     }
-
     return types as (LeaveType)[];
   };
 
-
   const getBalanceForType = (type: string) => {
-
     if (!leaveBalance) return 0;
-
     const monthlyData = type === "SICK"
       ? leaveBalance.sickLeaveBalance.remainingDays
       : leaveBalance.annualLeaveBalance.remainingDays;
-
     return monthlyData;
   };
+
   const availableTypes = getAvailableLeaveTypes();
 
   const HalfDaySelector = ({ label, value, onChange }: { label: string, value: HalfDayType, onChange: (v: HalfDayType) => void }) => (
@@ -220,20 +232,17 @@ const LeaveApplicationForm = () => {
             {availableTypes
               .filter(type => type !== "COMP_OFF")
               .map((type) => {
-
                 const isActive = formData.leaveTypeName === type;
                 const remaining = getBalanceForType(type);
                 return (
                   <div
                     key={type}
                     onClick={() => setFormData({ ...formData, leaveTypeName: type as any })}
-                    className={`flex-1 min-w-35 px-4 py-3 cursor-pointer transition-all relative ${isActive ? "bg-indigo-50/50" : "hover:bg-slate-50"
-                      }`}
+                    className={`flex-1 min-w-35 px-4 py-3 cursor-pointer transition-all relative ${isActive ? "bg-indigo-50/50" : "hover:bg-slate-50"}`}
                   >
                     {isActive && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />}
                     <div className="flex flex-col">
-                      <span className={`text-[8px] font-bold uppercase tracking-wider ${isActive ? "text-indigo-600" : "text-slate-400"
-                        }`}>
+                      <span className={`text-[8px] font-bold uppercase tracking-wider ${isActive ? "text-indigo-600" : "text-slate-400"}`}>
                         {type.replace("_", " ")}
                       </span>
                       <div className="flex flex-col mt-1">
@@ -251,7 +260,6 @@ const LeaveApplicationForm = () => {
       )}
 
       <div className="bg-white border-y md:border border-slate-200 md:rounded-2xl shadow-sm overflow-hidden">
-        {/* Responsive Header */}
         <div className="px-6 py-5 bg-slate-50/50 border-b border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <h1 className="text-lg md:text-xl font-bold text-slate-800">
             {formData.leaveTypeName === "COMP_OFF" ? "Bank Comp-Off Credit" : "Apply for Leave"}
@@ -260,24 +268,11 @@ const LeaveApplicationForm = () => {
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1.5">
               Required Approvals
             </span>
-            <div className="flex flex-wrap gap-2">
-              {/* {(() => {
-                const approvers = [];
-                const days = calculateDays();
-                const role = user?.role?.toUpperCase();
-
-
-
-                return approvers.map((app, index) => (
-                  <Badge key={index} label={app.label} active={app.active} />
-                ));
-              })()} */}
-            </div>
+            <div className="flex flex-wrap gap-2" />
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-8">
-          {/* 01. Category Selection: Stack on mobile */}
           <div className="space-y-3">
             <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
               <HiOutlineClock size={16} /> 01. Leave Category
@@ -306,6 +301,8 @@ const LeaveApplicationForm = () => {
                   label={formData.leaveTypeName === "COMP_OFF" ? "02. Date Worked" : "02. Start Date"}
                   selected={formData.startDate}
                   onChange={(date) => setFormData({ ...formData, startDate: date })}
+                  minDate={minAllowed}
+                  maxDate={maxAllowed}
                   required
                 />
                 <HalfDaySelector
@@ -324,7 +321,8 @@ const LeaveApplicationForm = () => {
                       ...formData,
                       [formData.leaveTypeName === "COMP_OFF" ? "compOffPlannedDate" : "endDate"]: date
                     })}
-                    minDate={formData.startDate || new Date()}
+                    minDate={formData.startDate || minAllowed || new Date()}
+                    maxDate={maxAllowed}
                     required
                   />
                   {formData.leaveTypeName !== "COMP_OFF" && (
@@ -376,7 +374,6 @@ const LeaveApplicationForm = () => {
               </div>
             )}
 
-          {/* Attachments & Reason: Full Width */}
           <div className="space-y-6">
             <div className="space-y-3">
               <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
@@ -416,20 +413,10 @@ const LeaveApplicationForm = () => {
             {loading ? "Processing..." : "Submit Application"}
             {!loading && <HiOutlinePaperAirplane size={18} className="rotate-45" />}
           </button>
-
         </form>
       </div>
     </div>
   );
 };
-
-// const Badge = ({ label, active }: { label: string; active: boolean }) => (
-//   <span className={`px-2.5 py-1.5 rounded-lg text-[10px] font-bold border transition-all whitespace-nowrap ${active
-//     ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-//     : "bg-slate-50 text-slate-400 border-slate-100"
-//     }`}>
-//     {label}
-//   </span>
-// );
 
 export default LeaveApplicationForm;

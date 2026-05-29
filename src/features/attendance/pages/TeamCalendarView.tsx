@@ -1,6 +1,10 @@
 import { useCalendar } from "@/features/attendance/hooks/useCalendar";
 import { useEmployee } from "@/features/employee/hooks/useEmployee";
 import DetailedRequestModal from "@/features/leave/components/DetailedRequestModal";
+import WfhDetailModal from "@/features/leave/components/WfhDetailModal";
+import { permissionService } from "@/features/leave/services/permissionService";
+import { wfhService } from "@/features/leave/services/wfhService";
+import PermissionDetailModal from "@/features/leave/components/PermissionDetailModal";
 import { useLeaveAction } from "@/features/leave/hooks/useLeaveActions";
 import type { LeaveDecision } from "@/features/leave/types";
 import { notify } from "@/features/notification/utils/notifications";
@@ -54,27 +58,63 @@ const TeamCalendarView: React.FC = () => {
 
 
   const [detailModalReq, setDetailModalReq] = useState<any | null>(null);
+  const [wfhModalReq, setWfhModalReq] = useState<any | null>(null);
+  const [permissionModalReq, setPermissionModalReq] = useState<any | null>(null);
   const [dialogConfig, setDialogConfig] = useState<{
     isOpen: boolean;
     req: any;
     status: LeaveDecision | null;
   }>({ isOpen: false, req: null, status: null });
   const { processApproval } = useLeaveAction();
-  const executeDecision = async (req: any, status: LeaveDecision, commentText?: string) => {
-    const targetId = req.leaveId || req.id || req.employeeId;
-    const success = await processApproval({
-      leaveId: targetId,
-      approverId: user!.id,
-      decision: status,
-      comments: commentText
-    });
+// ── TeamCalendarView.tsx — executeDecision ONLY CHANGE ──────────────
+// Find this function and replace entirely
 
-    if (success) {
-      notify.leaveAction(status, req.employeeName || "Employee");
-      setDialogConfig({ isOpen: false, req: null, status: null });
-      loadAllData();
+const executeDecision = async (req: any, status: LeaveDecision, commentText?: string) => {
+  try {
+    // ✅ FIX: leaveTypeName check சேர்த்தோம்
+    // Backend calendar entry-ல் isWfh/isPermission/requestType இல்லை
+    // leaveTypeName மட்டும் இருக்கு — அதை check பண்ணணும்
+
+    const isWfh        = req.isWfh        || req.requestType === 'WFH'        || req.leaveTypeName === 'WFH';
+    const isPermission = req.isPermission  || req.requestType === 'PERMISSION' || req.leaveTypeName === 'PERMISSION';
+
+    if (isWfh) {
+      if (status === 'APPROVED') {
+        await wfhService.approveWfh(req.id, user!.id, commentText || 'Approved');
+      } else {
+        await wfhService.rejectWfh(req.id, user!.id, commentText || 'Rejected');
+      }
+
+    } else if (isPermission) {
+      if (status === 'APPROVED') {
+        await permissionService.approvePermission(req.id, user!.id, commentText || 'Approved');
+      } else {
+        await permissionService.rejectPermission(req.id, user!.id, commentText || 'Rejected');
+      }
+
+    } else {
+      // Regular Leave
+      const targetId = req.leaveId ?? req.id;
+      if (!targetId) {
+        console.error('[Calendar] Leave ID is null:', req);
+        return;
+      }
+      const success = await processApproval({
+        leaveId: targetId,
+        approverId: user!.id,
+        decision: status,
+        comments: commentText
+      });
+      if (!success) return;
     }
-  };
+
+    notify.leaveAction(status, req.employeeName || 'Employee');
+    setDialogConfig({ isOpen: false, req: null, status: null });
+    loadAllData();
+  } catch (err) {
+    console.error('Decision error:', err);
+  }
+};
   const calendarStats = useMemo(() => {
     const y = currentDate.getFullYear();
     const m = currentDate.getMonth();
@@ -168,10 +208,32 @@ const TeamCalendarView: React.FC = () => {
         }}
       />
 
+      <WfhDetailModal
+        isOpen={!!wfhModalReq}
+        req={wfhModalReq}
+        onClose={() => setWfhModalReq(null)}
+        onAction={(status) => {
+          const currentReq = wfhModalReq;
+          setWfhModalReq(null);
+          setDialogConfig({ isOpen: true, req: currentReq, status });
+        }}
+      />
+
+      <PermissionDetailModal
+        isOpen={!!permissionModalReq}
+        req={permissionModalReq}
+        onClose={() => setPermissionModalReq(null)}
+        onAction={(status) => {
+          const currentReq = permissionModalReq;
+          setPermissionModalReq(null);
+          setDialogConfig({ isOpen: true, req: currentReq, status: status as LeaveDecision });
+        }}
+      />
+
       <CommentDialog
         isOpen={dialogConfig.isOpen}
         onClose={() => setDialogConfig({ isOpen: false, req: null, status: null })}
-        title={dialogConfig.status === 'REJECTED' ? 'Reject Leave Request' : 'Approve Request'}
+        title={dialogConfig.status === 'REJECTED' ? 'Reject Request' : 'Approve Request'}
         onSubmit={(comment: string) => executeDecision(dialogConfig.req, dialogConfig.status!, comment)}
       />
       <div className="flex-1 bg-white border border-slate-200 rounded-sm shadow-sm overflow-hidden flex flex-col">
@@ -272,6 +334,8 @@ const TeamCalendarView: React.FC = () => {
                               className={`px-1 py-0.5 border text-[7px] font-black rounded-sm truncate ${
                                 leave.leaveTypeName === "WFH"
                                   ? "bg-teal-50 border-teal-200 text-teal-700"
+                                  : leave.leaveTypeName === "PERMISSION"
+                                  ? "bg-purple-50 border-purple-200 text-purple-700"
                                   : "bg-amber-50 border-amber-100 text-amber-700"
                               }`}
                             >
@@ -290,8 +354,14 @@ const TeamCalendarView: React.FC = () => {
                           )}
 
                           {team.slice(0, 2).map((emp: any, idx: number) => (
-                            <div key={idx} className="px-1 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-600 text-[7px] font-black rounded-sm truncate">
-                              <TeamMemberName employeeId={emp.employeeId} />
+                            <div key={idx} className={`px-1 py-0.5 border text-[7px] font-black rounded-sm truncate ${
+                              emp.leaveTypeName === "WFH"
+                                ? "bg-teal-50 border-teal-200 text-teal-700"
+                                : emp.leaveTypeName === "PERMISSION"
+                                ? "bg-purple-50 border-purple-200 text-purple-700"
+                                : "bg-indigo-50 border-indigo-100 text-indigo-600"
+                            }`}>
+                              <TeamMemberName employeeId={emp.employeeId} /> · {emp.leaveTypeName || 'Leave'}
                             </div>
                           ))}
                         </div>
@@ -383,10 +453,12 @@ const TeamCalendarView: React.FC = () => {
                                   className={`flex items-center justify-between p-3 rounded-xl border shadow-sm ${
                                     leave.leaveTypeName === "WFH"
                                       ? "bg-teal-50 border-teal-100"
+                                      : leave.leaveTypeName === "PERMISSION"
+                                      ? "bg-purple-50 border-purple-100"
                                       : "bg-amber-50 border-amber-100"
                                   }`}
                                 >
-                                  <span className={`text-xs font-black ${leave.leaveTypeName === "WFH" ? "text-teal-900" : "text-amber-900"}`}>
+                                  <span className={`text-xs font-black ${leave.leaveTypeName === "WFH" ? "text-teal-900" : leave.leaveTypeName === "PERMISSION" ? "text-purple-900" : "text-amber-900"}`}>
                                     {leave.leaveTypeName}
                                   </span>
                                   <StatusBadge2 status={leave.status} />
@@ -681,21 +753,25 @@ const TeamCalendarView: React.FC = () => {
                   className={`flex items-center gap-3 p-3 border rounded-sm ${
                     leave.leaveTypeName === "WFH"
                       ? "bg-teal-50/50 border-teal-200"
+                      : leave.leaveTypeName === "PERMISSION"
+                      ? "bg-purple-50/50 border-purple-200"
                       : "bg-amber-50/50 border-amber-200"
                   }`}
                 >
                   <div className={`w-8 h-8 flex items-center justify-center rounded-sm shrink-0 ${
                     leave.leaveTypeName === "WFH"
                       ? "bg-teal-100 text-teal-600"
+                      : leave.leaveTypeName === "PERMISSION"
+                      ? "bg-purple-100 text-purple-600"
                       : "bg-amber-100 text-amber-600"
                   }`}>
                     <FaUserAlt size={10} />
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <p className={`text-xs font-black truncate ${leave.leaveTypeName === "WFH" ? "text-teal-900" : "text-amber-900"}`}>
+                    <p className={`text-xs font-black truncate ${leave.leaveTypeName === "WFH" ? "text-teal-900" : leave.leaveTypeName === "PERMISSION" ? "text-purple-900" : "text-amber-900"}`}>
                       My {leave.leaveTypeName || 'Leave'}
                     </p>
-                    <div className={`flex items-center text-[10px] ${leave.leaveTypeName === "WFH" ? "text-teal-700" : "text-amber-700"}`}>
+                    <div className={`flex items-center text-[10px] ${leave.leaveTypeName === "WFH" ? "text-teal-700" : leave.leaveTypeName === "PERMISSION" ? "text-purple-700" : "text-amber-700"}`}>
                       <span>Status: </span>
                       <div className="ml-1 scale-75 origin-left">
                         <StatusBadge2 status={leave.status} />
@@ -706,24 +782,47 @@ const TeamCalendarView: React.FC = () => {
               ))
             )}
 
-            {/* 3. TEAM LEAVES SECTION (Existing) */}
+            {/* 3. TEAM LEAVES SECTION */}
             {selectedDayTeamLeaves.length > 0 ? (
-              selectedDayTeamLeaves.map((emp: any) => (
+              selectedDayTeamLeaves.map((emp: any, idx: number) => (
                 <div
-                  key={emp.employeeId}
-                  onClick={() => setDetailModalReq({ ...emp, id: emp.leaveId || emp.id })}
-                  className="flex items-center gap-3 p-3 border border-slate-100 rounded-sm cursor-pointer hover:bg-slate-50 transition-all"
+                  key={`${emp.employeeId}-${idx}`}
+                  onClick={() => {
+                    if (emp.isWfh || emp.leaveTypeName === 'WFH') {
+                      setWfhModalReq({ ...emp });
+                    } else if (emp.isPermission || emp.leaveTypeName === 'PERMISSION') {
+                      setPermissionModalReq({ ...emp });
+                    } else {
+                      setDetailModalReq({ ...emp, id: emp.leaveId || emp.id });
+                    }
+                  }}
+                  className="flex items-center gap-3 p-3 border border-slate-100 rounded-sm cursor-pointer hover:bg-slate-50 transition-all group"
                 >
-                  <div className="w-8 h-8 bg-slate-100 text-slate-500 flex items-center justify-center rounded-sm group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
+                  <div className={`w-8 h-8 flex items-center justify-center rounded-sm shrink-0 transition-colors ${
+                    emp.leaveTypeName === "WFH"
+                      ? "bg-teal-100 text-teal-600 group-hover:bg-teal-200"
+                      : emp.leaveTypeName === "PERMISSION"
+                      ? "bg-purple-100 text-purple-600 group-hover:bg-purple-200"
+                      : "bg-indigo-50 text-indigo-500 group-hover:bg-indigo-100"
+                  }`}>
                     <FaUserAlt size={10} />
                   </div>
-                  <div className="flex flex-col min-w-0">
+                  <div className="flex flex-col min-w-0 flex-1">
                     <p className="text-xs font-black text-slate-900 truncate group-hover:text-indigo-700">
                       <TeamMemberName employeeId={emp.employeeId} />
                     </p>
-                    <div className="flex items-center text-xs text-slate-500">
-                      <span>Status: </span>
-                      <div className="ml-1 scale-75 origin-left">
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {/* Leave type badge */}
+                      <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-sm uppercase tracking-wide ${
+                        emp.leaveTypeName === "WFH"
+                          ? "bg-teal-100 text-teal-700"
+                          : emp.leaveTypeName === "PERMISSION"
+                          ? "bg-purple-100 text-purple-700"
+                          : "bg-indigo-50 text-indigo-600"
+                      }`}>
+                        {emp.leaveTypeName || 'Leave'}
+                      </span>
+                      <div className="scale-75 origin-left">
                         <StatusBadge2 status={emp.status} />
                       </div>
                     </div>
@@ -822,5 +921,5 @@ const TeamMemberName = ({ employeeId }: { employeeId: string }) => {
 export default TeamCalendarView;
 
 function loadAllData() {
-  throw new Error("Function not implemented.");
+  // placeholder — actual reload is handled by useEffect on year/month change
 }

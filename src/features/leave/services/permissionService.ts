@@ -34,6 +34,7 @@ export const permissionService = {
         );
         return response.data;
     },
+    
 
     rejectPermission: async (
         permissionId: number,

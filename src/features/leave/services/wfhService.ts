@@ -86,7 +86,7 @@ export const wfhService = {
 
   // Edit / update a pending WFH request (multipart/form-data)
   editWfh: async (wfhId: number, data: FormData): Promise<WfhRecord> => {
-    const response = await api.put(`/wfh/${wfhId}/update`, data, {
+    const response = await api.put(`/wfh/${wfhId}/edit`, data, {
       headers: { "Content-Type": "multipart/form-data" },
     });
     return response.data;

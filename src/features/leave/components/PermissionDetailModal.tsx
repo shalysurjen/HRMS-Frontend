@@ -1,3 +1,4 @@
+import api from "@/services/apiClient";
 import { useEmployee } from "@/features/employee/hooks/useEmployee";
 import React, { useEffect, useState } from "react";
 import { FaTimes } from "react-icons/fa";
@@ -135,7 +136,7 @@ const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                                 {req.startTime} – {req.endTime}
                             </p>
                             <p className="text-[10px] text-slate-400 font-medium">
-                                {req.durationFormatted} Total
+                                {req.durationMinutes ? `${Math.floor(req.durationMinutes/60)} HR${req.durationMinutes%60 ? ` ${req.durationMinutes%60} MIN` : ""}` : ""} Total
                             </p>
                         </div>
                     </div>
@@ -162,6 +163,54 @@ const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                             </div>
                         )}
                     </div>
+
+                    {/* Attachment */}
+                    {(req.permissionAttachmentPath || req.attachmentPath) && (
+                        <div>
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">
+                                Attachment
+                            </p>
+                            <div
+                                onClick={async () => {
+                                    try {
+                                        // ✅ FIX: Use api (Axios) — JWT token automatic-ஆ header-ல் போகும்
+                                        // window.open() browser tab = no JWT → 401
+                                        const response = await api.get(
+                                            `/permissions/${req.id}/attachment`,
+                                            { responseType: 'blob' }
+                                        );
+                                        const contentType = response.headers['content-type'];
+                                        const blob = new Blob([response.data], {
+                                            type: typeof contentType === 'string' ? contentType : 'application/octet-stream'
+                                        });
+                                        const objectUrl = URL.createObjectURL(blob);
+                                        window.open(objectUrl, '_blank');
+                                        // Cleanup after tab opens
+                                        setTimeout(() => URL.revokeObjectURL(objectUrl), 10000);
+                                    } catch (err) {
+                                        console.error('Attachment fetch error:', err);
+                                    }
+                                }}
+                                className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4 cursor-pointer hover:bg-indigo-50 hover:border-indigo-200 transition-all group"
+                            >
+                                <div className="w-9 h-9 bg-indigo-50 group-hover:bg-indigo-100 rounded-lg flex items-center justify-center flex-shrink-0 transition-colors">
+                                    <svg className="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                    </svg>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-slate-700 group-hover:text-indigo-700 truncate transition-colors">
+                                        {req.permissionAttachmentName || req.attachmentOriginalName || "attachment"}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400 group-hover:text-indigo-400">Click to view document</p>
+                                </div>
+                                {/* View icon */}
+                                <svg className="w-4 h-4 text-slate-300 group-hover:text-indigo-400 transition-colors flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Approval Workflow */}
                     <div>

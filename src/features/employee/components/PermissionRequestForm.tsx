@@ -292,9 +292,10 @@ const PermissionRequestForm = () => {
       formData.append("startTime",      `${pad(form.startTime.hour)}:${pad(form.startTime.minute)}:00`);
       formData.append("endTime",        `${pad(form.endTime.hour)}:${pad(form.endTime.minute)}:00`);
       formData.append("reason",         form.reason);
-      form.attachments.forEach((file) => {
-        formData.append("attachments", file);
-      });
+      // Backend PermissionRequestDTO.attachment is a single file — send only the first
+      if (form.attachments.length > 0) {
+        formData.append("attachment", form.attachments[0]);
+      }
 
       await permissionService.submitPermissionRequest(formData);
       setSubmitted(true);
