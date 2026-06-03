@@ -67,7 +67,7 @@ const AttendanceReports: React.FC = () => {
             const loadAllEmployees = async () => {
                 try {
                     // Use the page state here
-                    const result = await getEmployees({ page, size: 10 });
+                    const result = await getEmployees({ page, size: 20 });
                     if (result?.content) {
                         setEmployees(result.content);
                         setListTotalPages(result.totalPages || 0); // Update this
