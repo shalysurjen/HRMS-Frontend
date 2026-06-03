@@ -60,6 +60,7 @@ const TeamCalendarView: React.FC = () => {
   const [detailModalReq, setDetailModalReq] = useState<any | null>(null);
   const [wfhModalReq, setWfhModalReq] = useState<any | null>(null);
   const [permissionModalReq, setPermissionModalReq] = useState<any | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [dialogConfig, setDialogConfig] = useState<{
     isOpen: boolean;
     req: any;
@@ -110,7 +111,7 @@ const executeDecision = async (req: any, status: LeaveDecision, commentText?: st
 
     notify.leaveAction(status, req.employeeName || 'Employee');
     setDialogConfig({ isOpen: false, req: null, status: null });
-    loadAllData();
+    setRefreshKey(k => k + 1);
   } catch (err) {
     console.error('Decision error:', err);
   }
@@ -139,7 +140,7 @@ const executeDecision = async (req: any, status: LeaveDecision, commentText?: st
       fetchEmployeeCalendar(id);
       fetchAttendanceCalendar(id, year, month);
     }
-  }, [id, year, month, fetchTeamSchedule, fetchEmployeeCalendar, fetchAttendanceCalendar]);
+  }, [id, year, month, refreshKey, fetchTeamSchedule, fetchEmployeeCalendar, fetchAttendanceCalendar]);
 
 
   const formatKey = (date: Date) => {
@@ -919,7 +920,3 @@ const TeamMemberName = ({ employeeId }: { employeeId: string }) => {
 };
 
 export default TeamCalendarView;
-
-function loadAllData() {
-  // placeholder — actual reload is handled by useEffect on year/month change
-}
