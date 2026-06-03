@@ -18,6 +18,31 @@ import { leaveService } from "@/features/leave/services/leaveService";
 
 type HalfDayType = "FIRST_HALF" | "SECOND_HALF" | null;
 
+// ── Day counter helper ────────────────────────────────────────────────────────
+const calculateLeaveDays = (
+  start: Date | null,
+  end: Date | null,
+  isHalfDay: boolean,
+  startHalf: HalfDayType,
+  endHalf: HalfDayType
+): number => {
+  if (!start) return 0;
+  if (isHalfDay) return startHalf ? 0.5 : 1;
+  const endEff = end ?? start;
+  const startMs = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+  const endMs   = new Date(endEff.getFullYear(), endEff.getMonth(), endEff.getDate()).getTime();
+  const calDays = Math.round((endMs - startMs) / 86400000) + 1;
+  if (calDays === 1) {
+    if (startHalf && endHalf) return 1;
+    if (startHalf || endHalf) return 0.5;
+    return 1;
+  }
+  let days = calDays;
+  if (startHalf) days -= 0.5;
+  if (endHalf)   days -= 0.5;
+  return Math.max(0, days);
+};
+
 const LeaveApplicationForm = () => {
   const { user } = useAuth();
   const { setError, leaveBalance, fetchLeaveBalance, error } = useLeave();
@@ -337,6 +362,29 @@ const LeaveApplicationForm = () => {
             </div>
 
             <div className="pt-4 border-t border-slate-100">
+              {/* ── Days count pill ──────────────────────────────── */}
+              {(formData.startDate || formData.endDate) && (() => {
+                const days = calculateLeaveDays(
+                  formData.startDate,
+                  formData.isHalfDay ? formData.startDate : formData.endDate,
+                  formData.isHalfDay,
+                  formData.startDateHalfDayType,
+                  formData.endDateHalfDayType
+                );
+                const label = days === 0.5 ? "½ day" : days === 1 ? "1 day" : `${days} days`;
+                return (
+                  <div className="mb-4 flex items-center gap-3 bg-indigo-50/60 border border-indigo-100 rounded-xl px-4 py-3">
+                    <div className="bg-white border border-indigo-200 rounded-lg px-3 py-1.5 text-indigo-600 font-black text-sm min-w-[3rem] text-center shadow-sm">
+                      {label}
+                    </div>
+                    <p className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider">
+                      Total Leave Days Selected
+                    </p>
+                  </div>
+                );
+              })()}
+
+              {/* ── Single-day checkbox ─────────────────────────── */}
               <label className="flex items-center gap-3 cursor-pointer group">
                 <input
                   type="checkbox"
