@@ -33,6 +33,9 @@ import { PayslipPage } from "@/features/payroll/pages/PayslipPage";
 import SelfAppraisalPage from "@/features/appraisal/pages/SelfAppraisalPage";
 import AppraisalDashboardPage from "@/features/appraisal/pages/AppraisalDashboardPage";
 
+/* LEAVE EXPORT */
+import LeaveExportPage from "@/features/leave/pages/LeaveExportPage";
+
 const DashboardRoutes = () => {
   const { user } = useAuth();
   const role = user?.role;
@@ -105,6 +108,9 @@ const DashboardRoutes = () => {
       {/* SELF APPRAISAL */}
       <Route path="self-appraisal"   element={<SelfAppraisalPage />} />
       <Route path="appraisal-reviews" element={<AppraisalDashboardPage />} />
+
+      {/* LEAVE EXPORT — Admin sees all employees, Manager sees team only */}
+      <Route path="leave-export" element={<LeaveExportPage />} />
 
       {/* DEFAULT — use absolute path to prevent nested redirect loop */}
       <Route path="*" element={<Navigate to={`${basePath}/dashboard`} replace />} />

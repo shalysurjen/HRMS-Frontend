@@ -15,6 +15,7 @@ import {
 } from "react-icons/hi2";
 import { appraisalService } from "@/features/appraisal/services/appraisalService";
 import { AppraisalPreview } from "@/features/appraisal/components/AppraisalPreview";
+import { ProjectInput } from "@/features/appraisal/components/ProjectInput";
 
 /**
  * SelfAppraisalPage — EMPLOYEE only (enforced via AppRoutes).
@@ -138,7 +139,10 @@ const SelfAppraisalPage = () => {
         s.questions.some(sq => sq.questionId === q.questionId)
       )?.sectionName === SUGGESTION_SECTION;
       if (isSuggestionSec) return !ans?.answerText || ans.answerText.trim().length === 0;
-      const hasText   = ans?.answerText && ans.answerText.trim().length > 0;
+      const isProjectQ = detail.sections.find(s =>
+        s.questions.some(sq => sq.questionId === q.questionId)
+      )?.sectionName === "Performance" && q.questionText.toLowerCase().includes("project");
+      const hasText   = isProjectQ ? true : (ans?.answerText && ans.answerText.trim().length > 0);
       const hasRating = ans?.selfRating != null;
       return !hasText || !hasRating;
     });
@@ -205,14 +209,17 @@ const SelfAppraisalPage = () => {
   };
 
   // Helper: is this question missing a required field?
-  const isQuestionMissing = (q: { questionId: number; isRequired: boolean }, secName: string) => {
+  const isQuestionMissing = (q: {
+    questionText: any; questionId: number; isRequired: boolean 
+}, secName: string) => {
     if (!q.isRequired) return false;
     if (!submitAttempted) return false;
     const ans = answers[q.questionId];
     if (secName === SUGGESTION_SECTION) {
       return !ans?.answerText || ans.answerText.trim().length === 0;
     }
-    const hasText   = ans?.answerText && ans.answerText.trim().length > 0;
+    const isProjectQ = secName === "Performance" && q.questionText.toLowerCase().includes("project");
+    const hasText   = isProjectQ ? true : (ans?.answerText && ans.answerText.trim().length > 0);
     const hasRating = ans?.selfRating != null;
     return !hasText || !hasRating;
   };
@@ -668,7 +675,8 @@ const SelfAppraisalPage = () => {
                     </span>
                   </label>
 
-                  {/* Textarea */}
+                  {/* Textarea — hidden for project question (Projects widget replaces it) */}
+                  {!(currentSec?.sectionName === "Performance" && q.questionText.toLowerCase().includes("project")) && (
                   <div className="relative">
                     <textarea
                       rows={3}
@@ -689,6 +697,21 @@ const SelfAppraisalPage = () => {
                       </span>
                     )}
                   </div>
+                  )}
+
+                  {/* Project entries — only for Performance section, projects question */}
+                  {detail.appraisalId && currentSec?.sectionName === "Performance" && q.questionText.toLowerCase().includes("project") && (
+                    <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                        Projects
+                      </p>
+                      <ProjectInput
+                        appraisalId={detail.appraisalId}
+                        questionId={q.questionId}
+                        readonly={isSubmitted}
+                      />
+                    </div>
+                  )}
 
                   {/* Self rating — not shown for Suggestions section */}
                   {!isSuggestionSection && (

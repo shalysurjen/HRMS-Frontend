@@ -1,4 +1,4 @@
-import type { AdminAttendanceExportRequest, AttendanceExportRequest, AttendanceRecord, TeamAttendancePage, TeamCalendarResponse } from "@/features/attendance/types";
+import type { AdminAttendanceExportRequest, AttendanceExportRequest, AttendanceRecord, AttendanceMonthlySummary, TeamAttendancePage, TeamCalendarResponse } from "@/features/attendance/types";
 import api from "@/services/apiClient";
 
 
@@ -144,5 +144,50 @@ export const attendanceService = {
         });
 
         handleDownload(response.data, `Attendance_Selection_${payload.fromDate || 'report'}.xlsx`);
+    },
+
+    // ─── Monthly Summary: All employees (Admin/CFO) ────────────────
+    getMonthlySummaryAll: async (params: {
+        fromDate: string;
+        toDate: string;
+    }): Promise<AttendanceMonthlySummary[]> => {
+        const response = await api.get('/v1/attendance/summary/all', { params });
+        return response.data;
+    },
+
+    // ─── Monthly Summary: Team members (Manager) ───────────────────
+    getMonthlySummaryTeam: async (payload: {
+        empIds: string[];
+        fromDate: string;
+        toDate: string;
+    }): Promise<AttendanceMonthlySummary[]> => {
+        const response = await api.post('/v1/attendance/summary/team', payload);
+        return response.data;
+    },
+
+    // ─── Excel Download: All employees summary ─────────────────────
+    downloadMonthlySummaryAll: async (params: {
+        fromDate: string;
+        toDate: string;
+    }): Promise<void> => {
+        const response = await api.get('/v1/attendance/summary/download/all', {
+            params,
+            responseType: 'blob',
+        });
+        handleDownload(response.data,
+            `Monthly_Attendance_Summary_${params.fromDate}_to_${params.toDate}.xlsx`);
+    },
+
+    // ─── Excel Download: Team summary ──────────────────────────────
+    downloadMonthlySummaryTeam: async (payload: {
+        empIds: string[];
+        fromDate: string;
+        toDate: string;
+    }): Promise<void> => {
+        const response = await api.post('/v1/attendance/summary/download/team', payload, {
+            responseType: 'blob',
+        });
+        handleDownload(response.data,
+            `Team_Attendance_Summary_${payload.fromDate}_to_${payload.toDate}.xlsx`);
     },
 }
