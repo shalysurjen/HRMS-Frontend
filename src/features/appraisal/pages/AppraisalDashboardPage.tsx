@@ -76,13 +76,12 @@ function resolveTab(
 
 const AppraisalDashboardPage = () => {
   const { user } = useAuth();
-  const { summaries, cycles, loading, loadPendingApprover, loadAllForApprover, loadAll, loadCycles } = useAppraisal();
+  const { summaries, cycles, loading, loadAllForApprover, loadAll, loadCycles } = useAppraisal();
 
   const [selected, setSelected]       = useState<AppraisalSummary | null>(null);
   const [tab, setTab]                  = useState<TabKey>("ALL");
   const [filterCycleId, setFilterCycleId] = useState<number | "">("");
   const [exporting, setExporting]      = useState(false);
-  const [startingReview, setStartingReview] = useState<number | null>(null);
 
   const role      = user?.role?.toUpperCase() ?? "";
   const isCOO     = role === "COO" || role === "CEO";
@@ -100,28 +99,6 @@ const AppraisalDashboardPage = () => {
       loadAllForApprover(user.id);  // FIX: includes L2 view-only records from submission
     }
   }, [user?.id, filterCycleId]); // eslint-disable-line
-
-  // ── L2: Start Review (VIEW_ONLY → Pending) ────────────────────────────────
-  // FIX: COO (isViewAll) uses loadAll(); regular approvers use loadAllForApprover().
-  // Previously always called loadAllForApprover(), which returned empty for COO
-  // because COO's empId is not the firstApproverId/finalApproverId on most records.
-  const handleStartL2Review = async (s: AppraisalSummary) => {
-    if (!user?.id) return;
-    setStartingReview(s.appraisalId);
-    try {
-      await appraisalService.markL2UnderReview(s.appraisalId, user.id);
-      // Reload so the record moves to Pending tab
-      if (isViewAll) {
-        await loadAll(filterCycleId ? Number(filterCycleId) : undefined);
-      } else {
-        await loadAllForApprover(user.id);
-      }
-    } catch {
-      alert("Failed to start review. Please try again.");
-    } finally {
-      setStartingReview(null);
-    }
-  };
 
   // ── Export ─────────────────────────────────────────────────────────────────
   const handleExcelExport = async () => {
