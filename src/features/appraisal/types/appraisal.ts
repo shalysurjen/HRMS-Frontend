@@ -1,6 +1,9 @@
+// src/features/appraisal/types/appraisal.ts
+
 export type AppraisalStatus =
   | "DRAFT" | "SUBMITTED" | "UNDER_REVIEW"
   | "L1_APPROVED" | "L1_REJECTED"
+  | "L2_UNDER_REVIEW"   // L2 clicked Start Review → Pending tab
   | "L2_REJECTED"
   | "FINAL_REVIEW" | "PUBLISHED" | "CLOSED";
 
@@ -28,6 +31,13 @@ export interface AnswerDTO {
   selfRating?: number;
 }
 
+// ── NEW: lightweight project item returned by the backend ───────────────────
+export interface ProjectItem {
+  id: number;
+  projectName: string;
+  description: string;
+}
+
 export interface QuestionAnswer {
   questionId: number;
   questionText: string;
@@ -36,25 +46,27 @@ export interface QuestionAnswer {
   answerText?: string;
   selfRating?: number;
 
-  // NEW: answer-level L1 reviewer fields (stored on SelfAppraisalAnswer)
+  // L1 answer-level fields
   revisedRating?: number;
   revisedRemarks?: string;
 
-  // NEW: answer-level L2 / final reviewer fields
+  // L2 / final answer-level fields
   finalRating?: number;
   finalRemarks?: string;
 
-  // Legacy remark-table fields (still populated for backward compat)
+  // Legacy remark-table fallback fields
   l1Remark?: string;
   l1RevisedRating?: number;
   l2Remark?: string;
   l2RevisedRating?: number;
+
+  // ── NEW: projects for Q6 ─────────────────────────────────────────────────
+  projects?: ProjectItem[];
 }
 
 export interface SectionData {
   sectionName: string;
   questions: QuestionAnswer[];
-  /** NEW: average of selfRating across rated questions in this section. */
   sectionAvgRating?: number;
 }
 
@@ -62,9 +74,7 @@ export interface StatusHistory {
   fromStatus: string;
   toStatus: string;
   changedBy: string;
-  /** NEW: human-readable name of the actor. */
   changedByName?: string;
-  /** NEW: semantic action type (e.g. "SUBMITTED", "L1_APPROVED"). */
   actionType?: string;
   remarks?: string;
   changedAt: string;
@@ -87,7 +97,6 @@ export interface AppraisalDetail {
   l1ReviewedAt?: string;
   publishedAt?: string;
   overallAvgRating?: number;
-  // Approver identity (so L2 can see L1's info)
   firstApproverId?: string;
   firstApproverName?: string;
   finalApproverId?: string;
@@ -106,22 +115,22 @@ export interface AppraisalSummary {
   status: AppraisalStatus;
   submittedAt?: string;
   publishedAt?: string;
+  // ── NEW: needed so dashboard can compute per-record approver level ─────────
+  firstApproverId?: string;
+  finalApproverId?: string;
 }
 
 // Rating options: 0, 0.5, 1.0 ... 5.0
 export const RATING_OPTIONS = Array.from({ length: 11 }, (_, i) => i * 0.5);
 
-/** Derive the effective L1 rating for a question (answer-level → remark-table fallback). */
 export const getEffectiveL1Rating = (q: QuestionAnswer): number | undefined =>
   q.revisedRating ?? q.l1RevisedRating;
 
-/** Derive the effective L2 / final rating for a question. */
 export const getEffectiveL2Rating = (q: QuestionAnswer): number | undefined =>
   q.finalRating ?? q.l2RevisedRating;
 
 const SUGGESTION_SECTION = "Suggestions";
 
-/** Compute section average for a set of answer objects (local draft state). */
 export const computeSectionAvg = (
   questions: QuestionAnswer[],
   answers: Record<number, AnswerDTO>
@@ -132,7 +141,6 @@ export const computeSectionAvg = (
   return Math.round((sum / rated.length) * 100) / 100;
 };
 
-/** Compute overall average across all sections EXCLUDING the Suggestion section (local draft state). */
 export const computeOverallAvg = (
   sections: SectionData[],
   answers: Record<number, AnswerDTO>

@@ -16,6 +16,7 @@ import ProtectedRoute from "./ProtectedRoute";
 import FileViewer from "@/features/dashboard/admin/pages/FileViewer";
 import SelfAppraisalPage from "@/features/appraisal/pages/SelfAppraisalPage";
 import AppraisalDashboardPage from "@/features/appraisal/pages/AppraisalDashboardPage";
+import AdminAppraisalCyclePage from "@/features/appraisal/pages/AdminAppraisalCyclePage";
 
 /**
  * APPRAISAL ROUTING RULES:
@@ -85,6 +86,14 @@ const AppRoutes: React.FC = () => {
         */}
         <Route element={<ProtectedRoute allowedRoles={REVIEWER_ROLES} />}>
           <Route path="/appraisal-reviews" element={<AppraisalDashboardPage />} />
+        </Route>
+
+        {/*
+          Admin Appraisal Cycle Management — ADMIN / HR only.
+          Toggle isActive (current year) and isOpen (submissions allowed) per cycle.
+        */}
+        <Route element={<ProtectedRoute allowedRoles={["ADMIN", "HR"]} />}>
+          <Route path="/admin/appraisal-cycles" element={<AdminAppraisalCyclePage/>} />
         </Route>
 
         <Route path="/profile" element={<EmployeeProfile />} />

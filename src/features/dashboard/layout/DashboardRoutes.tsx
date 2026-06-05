@@ -28,6 +28,7 @@ import AttendanceReports from "@/features/attendance/pages/AttendanceReports";
 import PolicyConfig from "../admin/pages/PolicyConfig";
 import { CFOEmployeesPage } from "@/features/payroll/pages/Cfoemployeepage";
 import { PayslipPage } from "@/features/payroll/pages/PayslipPage";
+import AdminAppraisalCyclePage from "@/features/appraisal/pages/AdminAppraisalCyclePage";
 
 /* SELF APPRAISAL */
 import SelfAppraisalPage from "@/features/appraisal/pages/SelfAppraisalPage";
@@ -85,6 +86,9 @@ const DashboardRoutes = () => {
       <Route path="flash-news"         element={<FlashNewsForm />} />
       <Route path="attendance-reports" element={<AttendanceReports />} />
       <Route path="policies"           element={<PolicyConfig />} />
+
+      {/* ADMIN APPRAISAL CYCLE */}
+      <Route path="admin/appraisal-cycles" element={<AdminAppraisalCyclePage />} />
 
       {/* PAYROLL */}
       <Route path="payslip" element={<PayrollView />} />

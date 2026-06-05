@@ -3,11 +3,13 @@ import { StatusBadge } from "@/features/appraisal/components/StatusBadge";
 import {
   getEffectiveL1Rating,
 } from "@/features/appraisal/types/appraisal";
-import type { AppraisalDetail } from "@/features/appraisal/types/appraisal";
+import type { AppraisalDetail, ProjectItem } from "@/features/appraisal/types/appraisal";
 import {
   HiOutlineArrowLeft,
   HiOutlineCheckCircle,
+  HiOutlineFolderOpen,
 } from "react-icons/hi2";
+import { ProjectInput } from "@/features/appraisal/components/ProjectInput";
 
 interface Props {
   detail: AppraisalDetail;
@@ -15,7 +17,7 @@ interface Props {
   overallRemark: string;
   approverLevel: "EMPLOYEE" | "L1" | "L2";
   actionLabel: string;
-  actionColor: "indigo" | "teal";
+  actionColor: "indigo" | "teal" | "rose";
   onCancel: () => void;
   onConfirm: () => void;
   saving: boolean;
@@ -42,6 +44,10 @@ export const AppraisalPreview = ({
     teal: {
       bg: "bg-teal-600 hover:bg-teal-700",
       ring: "focus:ring-teal-500/30",
+    },
+    rose: {
+      bg: "bg-rose-600 hover:bg-rose-700",
+      ring: "focus:ring-rose-500/30",
     },
   };
   const colors = colorMap[actionColor];
@@ -113,67 +119,107 @@ export const AppraisalPreview = ({
                       {q.questionText}
                     </p>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {/* Employee answer */}
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                          Employee Answer
-                        </p>
+                    {/* ── Row 1: Employee Answer (full width) ── */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                        Employee Answer
+                      </p>
+
+                      {!q.questionText?.toLowerCase().includes("project") && (
                         <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
                           {q.answerText || (
                             <span className="italic text-slate-300">No answer</span>
                           )}
                         </p>
-                      </div>
+                      )}
 
-                      {/* Self rating */}
+                      {q.questionText?.toLowerCase().includes("project") && (
+                        <div className="space-y-2 mt-1">
+                          {q.projects && (q.projects as ProjectItem[]).length > 0 ? (
+                            (q.projects as ProjectItem[]).map((p, pi) => (
+                              <div
+                                key={p.id}
+                                className="flex items-start gap-2 p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl"
+                              >
+                                <div className="w-5 h-5 rounded-md bg-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
+                                  <HiOutlineFolderOpen size={11} className="text-white" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-800">
+                                    {String(pi + 1).padStart(2, "0")}. {p.projectName}
+                                  </p>
+                                  <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                                    {p.description}
+                                  </p>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <ProjectInput
+                              appraisalId={detail.appraisalId}
+                              questionId={q.questionId}
+                              readonly
+                            />
+                          )}
+                          {q.answerText && (
+                            <p className="text-xs text-slate-500 mt-1 whitespace-pre-wrap">
+                              {q.answerText}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Self rating — inline below answer */}
                       {!isSuggestion && (
-                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3">
-                          <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-2">
+                        <div className="mt-3 pt-3 border-t border-slate-200">
+                          <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">
                             Self Rating
                           </p>
                           {q.selfRating != null ? (
                             <RatingInput value={q.selfRating} readonly />
                           ) : (
-                            <p className="text-xs text-slate-300 italic">
-                              Not rated
-                            </p>
+                            <p className="text-xs text-slate-300 italic">Not rated</p>
                           )}
                         </div>
                       )}
                     </div>
 
-                    {/* L1 remark — shown when previewing as L2 */}
+                    {/* ── Row 2: L1 remark — L2 preview only ── */}
                     {approverLevel === "L2" &&
                       (q.revisedRemarks ?? q.l1Remark ?? l1Rating != null) && (
-                        <div className="bg-teal-50 border border-teal-100 rounded-xl p-3">
-                          <p className="text-[10px] font-bold text-teal-500 uppercase tracking-wider mb-1">
+                        <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 space-y-2">
+                          <p className="text-[10px] font-bold text-teal-500 uppercase tracking-wider">
                             Manager Remark (L1)
                           </p>
                           {(q.revisedRemarks ?? q.l1Remark) && (
-                            <p className="text-sm text-teal-800 mb-2">
+                            <p className="text-sm text-teal-800 whitespace-pre-wrap leading-relaxed">
                               {q.revisedRemarks ?? q.l1Remark}
                             </p>
                           )}
                           {!isSuggestion && l1Rating != null && (
-                            <RatingInput value={l1Rating} readonly />
+                            <div className="pt-2 border-t border-teal-100">
+                              <p className="text-[10px] font-bold text-teal-400 uppercase tracking-wider mb-1">
+                                L1 Rating
+                              </p>
+                              <RatingInput value={l1Rating} readonly />
+                            </div>
                           )}
                         </div>
                       )}
 
-                    {/* Your remark (the reviewer's input being previewed) */}
-                    {remark && (remark.remarkText?.trim() || remark.revisedRating != null) && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                        <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider mb-1">
+                    {/* ── Row 3: Your remark — L1/L2 only ── */}
+                    {approverLevel !== "EMPLOYEE" && remark && (remark.remarkText?.trim() || remark.revisedRating != null) && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                        <p className="text-[10px] font-bold text-amber-600 uppercase tracking-wider">
                           Your Remark ({approverLevel})
                         </p>
                         {remark.remarkText?.trim() && (
-                          <p className="text-sm text-amber-800 mb-2">
+                          <p className="text-sm text-amber-800 whitespace-pre-wrap leading-relaxed">
                             {remark.remarkText}
                           </p>
                         )}
                         {!isSuggestion && remark.revisedRating != null && (
-                          <div>
+                          <div className="pt-2 border-t border-amber-100">
                             <p className="text-[10px] font-bold text-amber-500 uppercase tracking-wider mb-1">
                               Revised Rating
                             </p>

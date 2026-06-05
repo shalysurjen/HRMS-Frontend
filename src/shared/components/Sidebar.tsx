@@ -83,7 +83,9 @@ function Sidebar({ isOpen, setIsOpen, isCollapsed, setIsCollapsed }: SidebarProp
     // Self Appraisal — COO and CFO NOT in roles (they use Appraisal Reviews instead)
     { name: "Self Appraisal",     path: "self-appraisal",     icon: <FaClipboardList />,       roles: ["EMPLOYEE","MANAGER","TEAM_LEADER","HR","ADMIN","CTO"] },
     // Appraisal Reviews — for approvers + COO (view all) + CFO (view all)
-    { name: "Appraisal Reviews",  path: "appraisal-reviews",  icon: <FaClipboardList />,       roles: ["MANAGER","COO","CFO","CTO"] },
+    { name: "Appraisal Reviews",  path: "appraisal-reviews",        icon: <FaClipboardList />,       roles: ["MANAGER","COO","CFO","CTO"] },
+    // Admin: cycle enable/disable only
+    { name: "Appraisal Cycles",   path: "admin/appraisal-cycles",   icon: <FaCalendarAlt />,         roles: ["ADMIN","HR"] },
     // { name: "Leave Export",       path: "leave-export",        icon: <FaFileExcel />,           roles: ["ADMIN","MANAGER","HR","CTO","COO"] },
   ];
 

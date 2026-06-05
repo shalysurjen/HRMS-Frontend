@@ -1,21 +1,18 @@
 import { useCalendar } from "@/features/attendance/hooks/useCalendar";
 import { useEmployee } from "@/features/employee/hooks/useEmployee";
 import type { EmployeeEntity } from "@/features/employee/types";
-import type { AttendanceMonthlySummary } from "@/features/attendance/types";
 import { useAuth } from "@/shared/auth/useAuth";
 import React, { useEffect, useMemo, useState } from "react";
 import {
     FaArrowLeft,
     FaFileExport,
     FaListAlt,
-    FaChartBar,
     FaFileExcel
 } from "react-icons/fa";
-import { attendanceService } from "@/features/attendance/services/attendanceService";
 import LeaveExportPage from "@/features/leave/pages/LeaveExportPage";
 
 // ─── Tab type ────────────────────────────────────────────────
-type ActiveTab = "detailed" | "summary" | "leave";
+type ActiveTab = "detailed" | "leave";
 
 const AttendanceReports: React.FC = () => {
     const { user } = useAuth();
@@ -52,14 +49,8 @@ const AttendanceReports: React.FC = () => {
     const [attendanceTotalPages, setAttendanceTotalPages] = useState(0);
     const SIZE = 10;
 
-    // ── Summary tab state ─────────────────────────────────────
-    const [summaryData, setSummaryData] = useState<AttendanceMonthlySummary[]>([]);
-    const [summaryLoading, setSummaryLoading] = useState(false);
-    const [summaryError, setSummaryError] = useState<string | null>(null);
-    const [teamMemberIds, setTeamMemberIds] = useState<string[]>([]);
-
     // ═══════════════════════════════════════════════════════════
-    // LOAD EMPLOYEES (for detailed tab)
+    // LOAD EMPLOYEES
     // ═══════════════════════════════════════════════════════════
     useEffect(() => {
         if (!isAdmin && !isCfo) return;
@@ -77,15 +68,13 @@ const AttendanceReports: React.FC = () => {
         load();
     }, [isAdmin, isCfo, getEmployees, page, selectedEmployeeId]);
 
-    // LOAD TEAM MEMBERS for Manager summary
+    // LOAD TEAM MEMBERS for Manager
     useEffect(() => {
         if (!isManager || !user?.id) return;
         const loadTeam = async () => {
             try {
                 const members = await getTeamMembers(user.id);
                 if (members) {
-                    const ids = members.map((m: any) => m.employeeId || m.empId).filter(Boolean);
-                    setTeamMemberIds(ids);
                     setEmployees(members.map((m: any) => ({
                         empId: m.employeeId || m.empId,
                         name: m.employeeName || m.name,
@@ -97,47 +86,6 @@ const AttendanceReports: React.FC = () => {
         };
         loadTeam();
     }, [isManager, user?.id, getTeamMembers]);
-
-    // ═══════════════════════════════════════════════════════════
-    // LOAD SUMMARY DATA when tab switches or date changes
-    // ═══════════════════════════════════════════════════════════
-    useEffect(() => {
-        if (activeTab !== "summary") return;
-
-        const loadSummary = async () => {
-            setSummaryLoading(true);
-            setSummaryError(null);
-            try {
-                if (isAdmin || isCfo) {
-                    const data = await attendanceService.getMonthlySummaryAll({
-                        fromDate: dateRange.from,
-                        toDate: dateRange.to,
-                    });
-                    setSummaryData(data || []);
-                } else {
-                    // Manager: fetch team member IDs first, then summary
-                    const ids = teamMemberIds.length > 0
-                        ? teamMemberIds
-                        : employees.map((e: any) => e.empId || e.employeeId).filter(Boolean);
-
-                    if (ids.length === 0) return;
-
-                    const data = await attendanceService.getMonthlySummaryTeam({
-                        empIds: ids,
-                        fromDate: dateRange.from,
-                        toDate: dateRange.to,
-                    });
-                    setSummaryData(data || []);
-                }
-            } catch (err) {
-                console.error("Summary fetch failed", err);
-                setSummaryError("Failed to load summary. Please try again.");
-            } finally {
-                setSummaryLoading(false);
-            }
-        };
-        loadSummary();
-    }, [activeTab, dateRange, isAdmin, isCfo, teamMemberIds, employees]);
 
     // ═══════════════════════════════════════════════════════════
     // DETAILED TAB HELPERS
@@ -227,28 +175,6 @@ const AttendanceReports: React.FC = () => {
         }
     };
 
-    const handleSummaryExport = async () => {
-        try {
-            if (isAdmin || isCfo) {
-                await attendanceService.downloadMonthlySummaryAll({
-                    fromDate: dateRange.from,
-                    toDate: dateRange.to,
-                });
-            } else {
-                const ids = teamMemberIds.length > 0
-                    ? teamMemberIds
-                    : employees.map((e: any) => e.empId || e.employeeId).filter(Boolean);
-                await attendanceService.downloadMonthlySummaryTeam({
-                    empIds: ids,
-                    fromDate: dateRange.from,
-                    toDate: dateRange.to,
-                });
-            }
-        } catch (error) {
-            console.error("Summary export failed", error);
-        }
-    };
-
     const formatWorkingHours = (timeStr: string) => {
         if (!timeStr || timeStr === "00:00:00") return "-";
         const [h, m] = timeStr.split(":");
@@ -278,15 +204,6 @@ const AttendanceReports: React.FC = () => {
     const activeTotalPages = selectedEmployeeId ? attendanceTotalPages : listTotalPages;
 
     // ═══════════════════════════════════════════════════════════
-    // SUMMARY STAT CARD
-    // ═══════════════════════════════════════════════════════════
-    const StatPill = ({ label, value, color }: { label: string; value: number | string; color: string }) => (
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold ${color}`}>
-            {value} <span className="font-normal opacity-75">{label}</span>
-        </span>
-    );
-
-    // ═══════════════════════════════════════════════════════════
     // RENDER
     // ═══════════════════════════════════════════════════════════
     return (
@@ -313,8 +230,6 @@ const AttendanceReports: React.FC = () => {
                             <p className="text-sm text-slate-500 font-medium">
                                 {selectedEmployeeId && activeTab === "detailed"
                                     ? "Individual Attendance History"
-                                    : activeTab === "summary"
-                                    ? "Monthly attendance summary for validation & payroll"
                                     : "Overview of team attendance logs"}
                             </p>
                         </div>
@@ -322,11 +237,11 @@ const AttendanceReports: React.FC = () => {
 
                     {activeTab !== "leave" && (
                     <button
-                        onClick={activeTab === "summary" ? handleSummaryExport : handleDetailedExport}
+                        onClick={handleDetailedExport}
                         className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 flex items-center gap-2 shadow-sm shadow-indigo-200 transition-all active:scale-95"
                     >
                         <FaFileExport size={14} />
-                        {activeTab === "summary" ? "Download Summary" : "Export Report"}
+                        Export Report
                     </button>
                     )}
                 </div>
@@ -342,16 +257,6 @@ const AttendanceReports: React.FC = () => {
                         }`}
                     >
                         <FaListAlt size={13} /> Detailed Logs
-                    </button>
-                    <button
-                        onClick={() => setActiveTab("summary")}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
-                            activeTab === "summary"
-                                ? "bg-indigo-600 text-white shadow-sm"
-                                : "text-slate-500 hover:text-slate-700 hover:bg-slate-50"
-                        }`}
-                    >
-                        <FaChartBar size={13} /> Monthly Summary
                     </button>
                     <button
                         onClick={() => setActiveTab("leave")}
@@ -386,19 +291,11 @@ const AttendanceReports: React.FC = () => {
                             className="border border-slate-200 rounded-lg p-2 text-sm text-slate-700 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 outline-none"
                         />
                     </div>
-
-                    {activeTab === "summary" && summaryData.length > 0 && (
-                        <div className="ml-auto flex items-center gap-3 text-sm text-slate-500 font-medium">
-                            <span className="bg-slate-100 px-3 py-1.5 rounded-lg">
-                                {summaryData.length} employees
-                            </span>
-                        </div>
-                    )}
                 </div>
                 )}
 
                 {/* ══════════════════════════════════════════════
-                    TAB: DETAILED LOGS (existing logic preserved)
+                    TAB: DETAILED LOGS
                 ══════════════════════════════════════════════ */}
                 {activeTab === "detailed" && (
                     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
@@ -509,157 +406,6 @@ const AttendanceReports: React.FC = () => {
                 )}
 
                 {/* ══════════════════════════════════════════════
-                    TAB: MONTHLY SUMMARY
-                ══════════════════════════════════════════════ */}
-                {activeTab === "summary" && (
-                    <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-
-                        {/* Loading */}
-                        {summaryLoading && (
-                            <div className="flex items-center justify-center py-20 text-slate-400">
-                                <div className="flex flex-col items-center gap-3">
-                                    <div className="w-8 h-8 border-2 border-indigo-300 border-t-indigo-600 rounded-full animate-spin" />
-                                    <span className="text-sm font-medium">Loading summary...</span>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Error */}
-                        {summaryError && !summaryLoading && (
-                            <div className="flex items-center justify-center py-16 text-rose-500 text-sm font-medium">
-                                {summaryError}
-                            </div>
-                        )}
-
-                        {/* Table */}
-                        {!summaryLoading && !summaryError && (
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse text-sm">
-                                    <thead className="bg-slate-50/70">
-                                        <tr className="border-b border-slate-200">
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Emp ID</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">Employee</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">Work Days</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-emerald-600 uppercase tracking-wider text-center whitespace-nowrap">Present</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-rose-500 uppercase tracking-wider text-center whitespace-nowrap">Absent</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-amber-500 uppercase tracking-wider text-center whitespace-nowrap">Half Day</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-blue-500 uppercase tracking-wider text-center whitespace-nowrap">WFH</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-violet-500 uppercase tracking-wider text-center whitespace-nowrap">Leave</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-orange-500 uppercase tracking-wider text-center whitespace-nowrap">LOP</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">Weekend</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center whitespace-nowrap">Holiday</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">Total Hrs</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">Avg Hrs/Day</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-emerald-500 uppercase tracking-wider text-center whitespace-nowrap">Earliest In</th>
-                                            <th className="px-4 py-3.5 text-[11px] font-bold text-rose-400 uppercase tracking-wider text-center whitespace-nowrap">Latest Out</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {summaryData.length === 0 ? (
-                                            <tr>
-                                                <td colSpan={15} className="px-6 py-16 text-center text-slate-400 text-sm">
-                                                    No attendance data found for the selected date range.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            summaryData.map((row, i) => (
-                                                <tr key={row.employeeId} className={`hover:bg-indigo-50/30 transition-colors ${i % 2 === 0 ? "bg-white" : "bg-slate-50/40"}`}>
-                                                    <td className="px-4 py-3 text-xs font-mono text-slate-500 font-bold">{row.employeeId}</td>
-                                                    <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-2.5">
-                                                            <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-xs ring-1 ring-indigo-100 shrink-0">
-                                                                {row.employeeName?.charAt(0).toUpperCase()}
-                                                            </div>
-                                                            <span className="font-semibold text-slate-800 whitespace-nowrap">{row.employeeName}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-center font-bold text-slate-700">{row.totalWorkingDays}</td>
-
-                                                    {/* Present */}
-                                                    <td className="px-4 py-3 text-center">
-                                                        <span className="inline-block w-8 h-8 rounded-full bg-emerald-50 text-emerald-700 font-bold text-sm leading-8 text-center ring-1 ring-emerald-100">
-                                                            {row.presentDays}
-                                                        </span>
-                                                    </td>
-
-                                                    {/* Absent */}
-                                                    <td className="px-4 py-3 text-center">
-                                                        <span className={`inline-block w-8 h-8 rounded-full font-bold text-sm leading-8 text-center ring-1 ${row.absentDays > 0 ? "bg-rose-50 text-rose-700 ring-rose-100" : "bg-slate-50 text-slate-400 ring-slate-100"}`}>
-                                                            {row.absentDays}
-                                                        </span>
-                                                    </td>
-
-                                                    {/* Half Day */}
-                                                    <td className="px-4 py-3 text-center">
-                                                        <span className={`inline-block w-8 h-8 rounded-full font-bold text-sm leading-8 text-center ring-1 ${row.halfDays > 0 ? "bg-amber-50 text-amber-700 ring-amber-100" : "bg-slate-50 text-slate-400 ring-slate-100"}`}>
-                                                            {row.halfDays}
-                                                        </span>
-                                                    </td>
-
-                                                    {/* WFH */}
-                                                    <td className="px-4 py-3 text-center">
-                                                        <span className={`inline-block w-8 h-8 rounded-full font-bold text-sm leading-8 text-center ring-1 ${row.wfhDays > 0 ? "bg-blue-50 text-blue-700 ring-blue-100" : "bg-slate-50 text-slate-400 ring-slate-100"}`}>
-                                                            {row.wfhDays}
-                                                        </span>
-                                                    </td>
-
-                                                    {/* Leave */}
-                                                    <td className="px-4 py-3 text-center">
-                                                        <span className={`inline-block w-8 h-8 rounded-full font-bold text-sm leading-8 text-center ring-1 ${row.leaveDays > 0 ? "bg-violet-50 text-violet-700 ring-violet-100" : "bg-slate-50 text-slate-400 ring-slate-100"}`}>
-                                                            {row.leaveDays}
-                                                        </span>
-                                                    </td>
-
-                                                    {/* LOP */}
-                                                    <td className="px-4 py-3 text-center">
-                                                        <span className={`inline-block w-8 h-8 rounded-full font-bold text-sm leading-8 text-center ring-1 ${row.lopDays > 0 ? "bg-orange-50 text-orange-700 ring-orange-100" : "bg-slate-50 text-slate-400 ring-slate-100"}`}>
-                                                            {row.lopDays}
-                                                        </span>
-                                                    </td>
-
-                                                    {/* Weekend */}
-                                                    <td className="px-4 py-3 text-center text-slate-400 font-medium">{row.weekendCount}</td>
-
-                                                    {/* Holiday */}
-                                                    <td className="px-4 py-3 text-center text-slate-400 font-medium">{row.holidayCount}</td>
-
-                                                    {/* Total Hours */}
-                                                    <td className="px-4 py-3 text-center font-mono font-bold text-slate-700 text-xs">{row.totalWorkingHours}</td>
-
-                                                    {/* Avg Hours */}
-                                                    <td className="px-4 py-3 text-center font-mono font-bold text-indigo-600 text-xs">{row.avgWorkingHours}</td>
-
-                                                    {/* Earliest In */}
-                                                    <td className="px-4 py-3 text-center font-mono text-emerald-600 font-bold text-xs">{row.earliestCheckIn}</td>
-
-                                                    {/* Latest Out */}
-                                                    <td className="px-4 py-3 text-center font-mono text-rose-500 font-bold text-xs">{row.latestCheckOut}</td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-
-                                {/* Summary Footer */}
-                                {summaryData.length > 0 && (
-                                    <div className="px-6 py-3 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between">
-                                        <span className="text-xs text-slate-500 font-medium">
-                                            Showing {summaryData.length} employees · {dateRange.from} to {dateRange.to}
-                                        </span>
-                                        <div className="flex gap-3">
-                                            <StatPill label="Total Present" value={summaryData.reduce((a, r) => a + r.presentDays, 0)} color="bg-emerald-50 text-emerald-700" />
-                                            <StatPill label="Total Absent" value={summaryData.reduce((a, r) => a + r.absentDays, 0)} color="bg-rose-50 text-rose-700" />
-                                            <StatPill label="Total LOP" value={summaryData.reduce((a, r) => a + r.lopDays, 0)} color="bg-orange-50 text-orange-700" />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-
-                {/* ══════════════════════════════════════════════
                     TAB: LEAVE EXPORT
                 ══════════════════════════════════════════════ */}
                 {activeTab === "leave" && (
@@ -692,6 +438,7 @@ const AttendanceReports: React.FC = () => {
                 </div>
             )}
         </div>
+    </div>
     );
 };
 

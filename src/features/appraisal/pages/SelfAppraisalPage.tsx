@@ -36,7 +36,7 @@ const SUGGESTION_SECTION = "Suggestions";
 
 const SelfAppraisalPage = () => {
   const { user } = useAuth();
-  const { cycles, detail, loading, error, loadCycles, loadOrCreate, saveDraft, submitFinal } =
+  const { cycles, detail, loading, error, loadCycles, loadOrCreate, loadPublished, saveDraft, submitFinal } =
     useAppraisal();
 
   const [selectedCycleId, setSelectedCycleId] = useState<number | null>(null);
@@ -50,6 +50,7 @@ const SelfAppraisalPage = () => {
   const [downloading, setDownloading] = useState(false);
   // Track whether submit was attempted — to show rose highlights
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [publishedDetail, setPublishedDetail] = useState<typeof detail>(null);
 
   useEffect(() => { loadCycles(); }, []); 
   // eslint-disable-line
@@ -107,6 +108,22 @@ const SelfAppraisalPage = () => {
     setAnswers(existing);
 
     if (data.status === "PUBLISHED" || data.status === "CLOSED") {
+      // Reload via getPublished — updates detail state with showRemarks=true (L1/L2 remarks included)
+      const pub = await loadPublished(user.id, selectedCycleId);
+      if (pub) {
+        setPublishedDetail(pub);
+        const pub2: Record<number, AnswerDTO> = {};
+        pub.sections.forEach(sec =>
+          sec.questions.forEach(q => {
+            pub2[q.questionId] = {
+              questionId: q.questionId,
+              answerText: q.answerText,
+              selfRating: q.selfRating ?? undefined,
+            };
+          })
+        );
+        setAnswers(pub2);
+      }
       setStep("result");
     } else {
       setStep("form");
@@ -122,8 +139,8 @@ const SelfAppraisalPage = () => {
     showToast("Draft saved successfully!");
   };
 
-  // ── Validate + go to preview ────────────────────────────────────────────
-  const handleSubmit = async () => {
+    // ── Validate + go to preview ────────────────────────────────────────────
+   const handleSubmit = async () => {
     if (!user?.id || !selectedCycleId || !detail) return;
 
     const allQuestions = detail.sections.flatMap(s => s.questions);
@@ -131,19 +148,24 @@ const SelfAppraisalPage = () => {
     const lastQuestion = allQuestions[totalQuestions - 1];
 
     const missing = allQuestions.filter((q, idx) => {
-      if (!q.isRequired) return false;
-      const isLast = idx === totalQuestions - 1;
-      if (isLast && !q.isRequired) return false;
       const ans = answers[q.questionId];
-      const isSuggestionSec = detail.sections.find(s =>
+      const sec = detail.sections.find(s =>
         s.questions.some(sq => sq.questionId === q.questionId)
-      )?.sectionName === SUGGESTION_SECTION;
+      );
+      const isSuggestionSec = sec?.sectionName === SUGGESTION_SECTION;
+
+      if (isSuggestionSec && !q.isRequired) return false;
       if (isSuggestionSec) return !ans?.answerText || ans.answerText.trim().length === 0;
-      const isProjectQ = detail.sections.find(s =>
-        s.questions.some(sq => sq.questionId === q.questionId)
-      )?.sectionName === "Performance" && q.questionText.toLowerCase().includes("project");
-      const hasText   = isProjectQ ? true : (ans?.answerText && ans.answerText.trim().length > 0);
+
+      const isLast = idx === allQuestions.length - 1;
+      if (isLast && !q.isRequired) return false;
+
+      const isProjectQ =
+        sec?.sectionName === "Performance" &&
+        q.questionText.toLowerCase().includes("project");
+      const hasText = isProjectQ ? true : (ans?.answerText && ans.answerText.trim().length > 0);
       const hasRating = ans?.selfRating != null;
+
       return !hasText || !hasRating;
     });
 
@@ -165,10 +187,12 @@ const SelfAppraisalPage = () => {
       return;
     }
 
-    // All valid — go to preview
+    setSaving(true);
+    await saveDraft(user.id, selectedCycleId, Object.values(answers));
+    setSaving(false);
+
     setStep("preview");
   };
-
   // ── Confirm submit (called from preview) ────────────────────────────────
   const handleConfirmSubmit = async () => {
     if (!user?.id || !selectedCycleId) return;
@@ -202,10 +226,18 @@ const SelfAppraisalPage = () => {
     value: string | number | undefined
   ) => {
     if (skippedLastQuestion) setSkippedLastQuestion(false);
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: { ...prev[questionId], questionId, [field]: value },
-    }));
+    setAnswers(prev => {
+      const existing = prev[questionId] ?? { questionId };
+      // Empty string → remove answerText so preview shows "No answer"
+      if (field === "answerText" && (value === "" || value === undefined)) {
+        const { answerText, ...rest } = { ...existing, questionId };
+        return { ...prev, [questionId]: rest as AnswerDTO };
+      }
+      return {
+        ...prev,
+        [questionId]: { ...existing, questionId, [field]: value },
+      };
+    });
   };
 
   // Helper: is this question missing a required field?
@@ -218,8 +250,9 @@ const SelfAppraisalPage = () => {
     if (secName === SUGGESTION_SECTION) {
       return !ans?.answerText || ans.answerText.trim().length === 0;
     }
-    const isProjectQ = secName === "Performance" && q.questionText.toLowerCase().includes("project");
-    const hasText   = isProjectQ ? true : (ans?.answerText && ans.answerText.trim().length > 0);
+    const isProjectQ = currentSec?.sectionName === "Performance" && q.questionText?.toLowerCase().includes("project");
+    if (isProjectQ) return false;
+    const hasText   = ans?.answerText && ans.answerText.trim().length > 0;
     const hasRating = ans?.selfRating != null;
     return !hasText || !hasRating;
   };
@@ -300,7 +333,8 @@ const SelfAppraisalPage = () => {
   }
 
   // ── Step: Result (PUBLISHED — employee sees full result) ─────────────────
-  if (step === "result" && detail) {
+  const resultDetail = publishedDetail ?? detail;
+  if (step === "result" && resultDetail) {
     return (
       <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
         {toast && (
@@ -316,11 +350,11 @@ const SelfAppraisalPage = () => {
             <p className="text-sm font-bold text-emerald-800">Appraisal Result Published</p>
             <p className="text-xs text-emerald-600 mt-0.5">
               Your manager has reviewed and published your appraisal.
-              {detail.publishedAt && ` Published on ${new Date(detail.publishedAt).toLocaleDateString("en-IN")}.`}
+              {resultDetail.publishedAt && ` Published on ${new Date(resultDetail.publishedAt!).toLocaleDateString("en-IN")}.`}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <StatusBadge status={detail.status} />
+            <StatusBadge status={resultDetail.status} />
             <button
               onClick={handleDownloadExcel}
               disabled={downloading}
@@ -341,7 +375,7 @@ const SelfAppraisalPage = () => {
         </div>
 
         {/* Overall rating summary */}
-        {detail.overallAvgRating !== undefined && (
+        {resultDetail.overallAvgRating !== undefined && (
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex items-center gap-6 flex-wrap">
             <div className="flex items-center gap-3">
               <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center">
@@ -350,36 +384,36 @@ const SelfAppraisalPage = () => {
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Overall Rating</p>
                 <p className="text-3xl font-black text-slate-800">
-                  {detail.overallAvgRating}
+                  {resultDetail.overallAvgRating}
                   <span className="text-sm text-slate-400 font-normal ml-1">/ 5.0</span>
                 </p>
               </div>
             </div>
             <div className="flex-1 min-w-0 flex flex-wrap gap-3">
-              {detail.l1OverallRemark && (
+              {resultDetail.l1OverallRemark && (
                 <div className="flex-1 min-w-[180px] bg-teal-50 border border-teal-100 rounded-xl p-3">
                   <p className="text-[10px] font-bold text-teal-500 uppercase tracking-wider mb-1">
                     Manager Remark (L1)
                   </p>
-                  <p className="text-xs text-teal-800">{detail.l1OverallRemark}</p>
+                  <p className="text-xs text-teal-800">{resultDetail.l1OverallRemark}</p>
                 </div>
               )}
-              {detail.l2OverallRemark && (
+              {resultDetail.l2OverallRemark && (
                 <div className="flex-1 min-w-[180px] bg-purple-50 border border-purple-100 rounded-xl p-3">
                   <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-1">
                     Final Approver Remark (L2)
                   </p>
-                  <p className="text-xs text-purple-800">{detail.l2OverallRemark}</p>
+                  <p className="text-xs text-purple-800">{resultDetail.l2OverallRemark}</p>
                 </div>
               )}
             </div>
           </div>
         )}
 
-        <EmployeeInfoCard detail={detail} />
+        <EmployeeInfoCard detail={resultDetail} />
 
         {/* Sections with answers + remarks */}
-        {detail.sections.map((sec, sIdx) => {
+        {resultDetail.sections.map((sec, sIdx) => {
           return (
             <div key={sIdx} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
               <div className="px-6 py-5 bg-slate-50/50 border-b border-slate-200 flex items-center justify-between">
@@ -405,6 +439,12 @@ const SelfAppraisalPage = () => {
                     sec.sectionName === SUGGESTION_SECTION &&
                     q.questionId === lastSuggQId &&
                     !q.isRequired;
+
+                  // FIX: detect project question in result view (same logic as form view)
+                  const isProjectQ =
+                    sec.sectionName === "Performance" &&
+                    q.questionText.toLowerCase().includes("project");
+
                   return (
                     <div key={q.questionId} className="space-y-3">
                       <label className="flex items-start gap-2">
@@ -421,12 +461,26 @@ const SelfAppraisalPage = () => {
                         </span>
                       </label>
 
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                          Your Answer
-                        </p>
-                        <p className="text-sm text-slate-700">{q.answerText || "—"}</p>
-                      </div>
+                      {/* FIX: render ProjectInput (readonly) for project questions instead of plain answerText */}
+                      {isProjectQ ? (
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
+                            Your Answer
+                          </p>
+                          <ProjectInput
+                            appraisalId={resultDetail.appraisalId}
+                            questionId={q.questionId}
+                            readonly
+                          />
+                        </div>
+                      ) : (
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                            Your Answer
+                          </p>
+                          <p className="text-sm text-slate-700">{q.answerText || "—"}</p>
+                        </div>
+                      )}
 
                       {!isSuggestion && q.selfRating !== undefined && (
                         <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
@@ -440,7 +494,7 @@ const SelfAppraisalPage = () => {
                       {(q.revisedRemarks || q.l1Remark) && (
                         <div className="bg-teal-50 border border-teal-100 rounded-xl p-3">
                           <p className="text-[10px] font-bold text-teal-500 uppercase tracking-wider mb-1">
-                            Manager Remark (L1) — {detail.firstApproverName ?? "Manager"}
+                            Manager Remark (L1) — {resultDetail.firstApproverName ?? "Manager"}
                           </p>
                           <p className="text-xs text-teal-800">{q.revisedRemarks ?? q.l1Remark}</p>
                           {!isSuggestion && (q.revisedRating ?? q.l1RevisedRating) !== undefined && (
@@ -454,7 +508,7 @@ const SelfAppraisalPage = () => {
                       {(q.finalRemarks || q.l2Remark) && (
                         <div className="bg-purple-50 border border-purple-100 rounded-xl p-3">
                           <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-1">
-                            Final Approver Remark (L2) — {detail.finalApproverName ?? "Final Approver"}
+                            Final Approver Remark (L2) — {resultDetail.finalApproverName ?? "Final Approver"}
                           </p>
                           <p className="text-xs text-purple-800">{q.finalRemarks ?? q.l2Remark}</p>
                           {!isSuggestion && (q.finalRating ?? q.l2RevisedRating) !== undefined && (
@@ -472,10 +526,10 @@ const SelfAppraisalPage = () => {
           );
         })}
 
-        {detail.statusHistory.length > 0 && (
+        {resultDetail.statusHistory.length > 0 && (
           <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
             <h3 className="text-sm font-bold text-slate-700 mb-4">Approval Timeline</h3>
-            <ApprovalTimeline history={detail.statusHistory} />
+            <ApprovalTimeline history={resultDetail.statusHistory} />
           </div>
         )}
 
@@ -602,6 +656,8 @@ const SelfAppraisalPage = () => {
               if (isSuggSec) {
                 return ans?.answerText && ans.answerText.trim().length > 0;
               }
+              const isProjectQ = sec.sectionName === "Performance" && q.questionText?.toLowerCase().includes("project");
+              if (isProjectQ) return true;
               return (
                 (ans?.answerText && ans.answerText.trim().length > 0) &&
                 ans?.selfRating != null
@@ -654,7 +710,6 @@ const SelfAppraisalPage = () => {
                 q.questionId === lastSuggestionQId &&
                 !q.isRequired;
 
-              // Rose highlight when submit attempted and field is missing
               const missing = isQuestionMissing(q, currentSec.sectionName);
               const missingText   = missing && !(ans?.answerText && ans.answerText.trim().length > 0);
               const missingRating = missing && !isSuggestionSection && ans?.selfRating == null;
@@ -675,7 +730,7 @@ const SelfAppraisalPage = () => {
                     </span>
                   </label>
 
-                  {/* Textarea — hidden for project question (Projects widget replaces it) */}
+                  {/* Textarea — hidden for project question */}
                   {!(currentSec?.sectionName === "Performance" && q.questionText.toLowerCase().includes("project")) && (
                   <div className="relative">
                     <textarea
@@ -699,7 +754,7 @@ const SelfAppraisalPage = () => {
                   </div>
                   )}
 
-                  {/* Project entries — only for Performance section, projects question */}
+                  {/* Project entries */}
                   {detail.appraisalId && currentSec?.sectionName === "Performance" && q.questionText.toLowerCase().includes("project") && (
                     <div className="border border-slate-200 rounded-xl p-3 bg-slate-50/50">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">
@@ -713,7 +768,7 @@ const SelfAppraisalPage = () => {
                     </div>
                   )}
 
-                  {/* Self rating — not shown for Suggestions section */}
+                  {/* FIX: Self rating — shown for ALL non-suggestion questions including project question */}
                   {!isSuggestionSection && (
                     <div className={`border rounded-xl p-3 ${
                       missingRating
@@ -802,7 +857,7 @@ const SelfAppraisalPage = () => {
                 }`}
             >
               {saving
-                ? "Submitting..."
+                ? "Saving..."
                 : skippedLastQuestion
                 ? "Confirm Submit (skip last) ✓"
                 : "Submit Appraisal ✓"}

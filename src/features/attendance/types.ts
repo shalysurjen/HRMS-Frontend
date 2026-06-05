@@ -41,22 +41,3 @@ export interface AdminAttendanceExportRequest {
   fromDate?: string;
   toDate?: string;
 }
-
-
-export interface AttendanceMonthlySummary {
-    employeeId: string;
-    employeeName: string;
-    totalWorkingDays: number;
-    presentDays: number;
-    absentDays: number;
-    halfDays: number;
-    wfhDays: number;
-    leaveDays: number;
-    lopDays: number;
-    weekendCount: number;
-    holidayCount: number;
-    totalWorkingHours: string;
-    avgWorkingHours: string;
-    earliestCheckIn: string;
-    latestCheckOut: string;
-}

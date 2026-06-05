@@ -116,6 +116,19 @@ export const employeeService = {
     return res.data;
   },
 
+  getTeamMembersPaged: async (id: string, page = 0, size = 10): Promise<{
+    content: TeamMember[];
+    totalPages: number;
+    totalElements: number;
+    number: number;
+    size: number;
+  }> => {
+    const res = await api.get(`/v1/dashboard/team-members/${id}/paged`, {
+      params: { page, size },
+    });
+    return res.data;
+  },
+
   createUser: async (userData: CreateUserRequest): Promise<string> => {
     try {
       const response = await api.post('/v1/admin/users/add', userData);

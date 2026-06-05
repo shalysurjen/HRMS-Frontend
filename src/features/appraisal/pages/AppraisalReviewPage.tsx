@@ -14,6 +14,9 @@ import {
   HiOutlineBookmarkSquare,
 } from "react-icons/hi2";
 import { appraisalService } from "@/features/appraisal/services/appraisalService";
+import { ProjectInput } from "@/features/appraisal/components/ProjectInput";
+import type { ProjectItem } from "@/features/appraisal/types/appraisal";
+import { HiOutlineFolderOpen } from "react-icons/hi2";
 
 interface Props {
   appraisalId:   number;
@@ -22,24 +25,6 @@ interface Props {
 }
 
 const SUGGESTION_SECTION = "Suggestions";
-
-/**
- * STATUS FLOW (backend enforces, frontend just sends approve/reject flags):
- *
- *  Employee submits   → status = "SUBMITTED"
- *  L1 sees it         → status "SUBMITTED" | "UNDER_REVIEW" | "L2_REJECTED"
- *  L1 saves draft     → status stays same (remarks saved, no status change)
- *  L1 approves        → status = "L1_APPROVED"  (triggers L2 notification)
- *  L1 rejects         → status = "L1_REJECTED"  (back to employee)
- *  L2 sees it         → status "L1_APPROVED"
- *  L2 saves draft     → status stays same (remarks saved, no status change)
- *  L2 saves review    → status = "FINAL_REVIEW"  (saved, not published yet)
- *  L2 rejects         → status = "L2_REJECTED"  (back to L1 only, before publish)
- *  L2 publishes       → status = "PUBLISHED"    (employee can see result)
- *
- *  L1 can act: SUBMITTED | UNDER_REVIEW | L1_APPROVED | L2_REJECTED
- *  L2 can act: L1_APPROVED (edit+reject) | FINAL_REVIEW (publish)
- */
 
 const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
   const { user } = useAuth();
@@ -59,9 +44,20 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
   const [toast,          setToast]        = useState<string | null>(null);
   const [submitAttempted, setSubmitAttempted] = useState(false);
 
-  useEffect(() => { loadDetail(appraisalId); }, [appraisalId]); // eslint-disable-line
+  useEffect(() => {
+    loadDetail(appraisalId).then(d => {
+      if (!user?.id || !d) return;
+      if (approverLevel === "L1" && d.status === "SUBMITTED") {
+        appraisalService.markUnderReview(appraisalId, user.id).catch(() => {});
+      }
+      if (approverLevel === "L2" && d.status === "L1_APPROVED") {
+        appraisalService.markL2UnderReview(appraisalId, user.id)
+          .then(() => loadDetail(appraisalId))
+          .catch(() => {});
+      }
+    });
+  }, [appraisalId]); // eslint-disable-line
 
-  // Pre-fill remarks from existing data (both L1 and L2)
   useEffect(() => {
     if (!detail) return;
     if (Object.keys(questionRemarks).length > 0) return;
@@ -71,8 +67,10 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
       detail.sections.forEach(sec =>
         sec.questions.forEach(q => {
           const r  = q.finalRemarks ?? q.l2Remark;
-          const rt = q.finalRating  ?? q.l2RevisedRating;
-          if (r || rt !== undefined) prefilled[q.questionId] = { remarkText: r ?? "", revisedRating: rt };
+          // Only restore L2's own previously saved rating — never copy L1's rating
+          const rt = q.finalRating ?? q.l2RevisedRating;
+          // Always seed every question so questionRemarks is never empty
+          prefilled[q.questionId] = { remarkText: r ?? "", revisedRating: rt };
         })
       );
       if (detail.l2OverallRemark) setOverallRemark(detail.l2OverallRemark);
@@ -118,12 +116,15 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
         const isSuggestion = sec.sectionName === SUGGESTION_SECTION;
         const r = questionRemarks[q.questionId];
         if (isSuggestion) return !r?.remarkText?.trim();
-        return !r?.remarkText?.trim() || r?.revisedRating == null;
+        // For L2: L1's existing rating counts as a valid rating
+        const hasRating =
+          r?.revisedRating != null ||
+          (approverLevel === "L2" && getEffectiveL1Rating(q) != null);
+        return !r?.remarkText?.trim() || !hasRating;
       })
     );
   };
 
-  // ── Save Draft: saves remarks without changing status ─────────────────────
   const handleSaveDraft = async () => {
     if (!user?.id) return;
     setDraftSaving(true);
@@ -147,7 +148,6 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
     }
   };
 
-  // ── Next: NO validation, just scroll to section card ────────────────────
   const handleNextSection = () => {
     setCurrentSection(p => p + 1);
     setTimeout(() => {
@@ -155,10 +155,8 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
     }, 50);
   };
 
-  // ── Action: approve/reject/publish — validate only on approve ────────────
   const handleActionClick = (approve: boolean, publish = false) => {
     if (!approve) {
-      // Reject: go straight to confirm (no preview needed)
       handleConfirm(false, false);
       return;
     }
@@ -219,7 +217,7 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
   const isPublishedOrClosed = ["PUBLISHED", "CLOSED"].includes(detail.status);
 
   const L1_ACTIVE_STATUSES = ["SUBMITTED", "UNDER_REVIEW", "L1_APPROVED", "L2_REJECTED"];
-  const L2_ACTIVE_STATUSES = ["L1_APPROVED", "FINAL_REVIEW"];
+  const L2_ACTIVE_STATUSES = ["L1_APPROVED", "L2_UNDER_REVIEW", "FINAL_REVIEW"];
 
   const alreadyActed =
     approverLevel === "L1" ? !L1_ACTIVE_STATUSES.includes(detail.status)
@@ -242,7 +240,6 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
     return !r?.remarkText?.trim() || r?.revisedRating == null;
   };
 
-  // ── PREVIEW step ──────────────────────────────────────────────────────────
   if (step === "preview" && detail && pendingAction) {
     const { approve, publish } = pendingAction;
     const label = publish
@@ -265,7 +262,6 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
     );
   }
 
-  // ── FORM step ─────────────────────────────────────────────────────────────
   return (
     <div className="max-w-4xl mx-auto py-6 px-4 space-y-6">
 
@@ -305,7 +301,7 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
         </div>
       )}
 
-      {/* L2 saved banner — only when FINAL_REVIEW status but submitted flag set */}
+      {/* L2 saved banner */}
       {approverLevel === "L2" && submitted && !isPublishedOrClosed && (
         <div className="flex items-center gap-3 p-4 bg-teal-50 border border-teal-200 rounded-2xl">
           <HiOutlineCheckCircle size={20} className="text-teal-500 shrink-0" />
@@ -318,7 +314,7 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
         </div>
       )}
 
-      {/* View-only / locked banner */}
+      {/* View-only banner */}
       {isViewOnly && (
         <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-2xl">
           <HiOutlineLockClosed size={20} className="text-amber-500 shrink-0" />
@@ -332,7 +328,7 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
         </div>
       )}
 
-      {/* Missing warning — only after submit attempted */}
+      {/* Missing warning */}
       {isActiveReviewer && submitAttempted && !allFilled && (
         <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 font-medium">
           <HiOutlineExclamationCircle size={15} className="shrink-0" />
@@ -408,7 +404,6 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
       {/* Current section card */}
       {currentSec && (
         <div ref={sectionCardRef} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          {/* Section header */}
           <div className="p-5 flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-slate-800">{currentSec.sectionName}</h2>
@@ -451,19 +446,58 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
                       </span>
                     </label>
 
-                    {/* Employee answer + self rating */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                          Employee Answer
-                        </p>
+                    {/* ── Row 1: Employee Answer (full width, self rating inline) ── */}
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                        Employee Answer
+                      </p>
+
+                      {!q.questionText?.toLowerCase().includes("project") && (
                         <p className="text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
                           {q.answerText || <span className="italic text-slate-300">No answer</span>}
                         </p>
-                      </div>
+                      )}
+
+                      {q.questionText?.toLowerCase().includes("project") && (
+                        <div className="space-y-2 mt-1">
+                          {q.projects && q.projects.length > 0 ? (
+                            (q.projects as ProjectItem[]).map((p, pi) => (
+                              <div
+                                key={p.id}
+                                className="flex items-start gap-2 p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl"
+                              >
+                                <div className="w-5 h-5 rounded-md bg-indigo-600 flex items-center justify-center shrink-0 mt-0.5">
+                                  <HiOutlineFolderOpen size={11} className="text-white" />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-800">
+                                    {String(pi + 1).padStart(2, "0")}. {p.projectName}
+                                  </p>
+                                  <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
+                                    {p.description}
+                                  </p>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <ProjectInput
+                              appraisalId={detail.appraisalId}
+                              questionId={q.questionId}
+                              readonly
+                            />
+                          )}
+                          {q.answerText && (
+                            <p className="text-xs text-slate-500 mt-1 whitespace-pre-wrap">
+                              {q.answerText}
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Self rating inline below answer */}
                       {!isSuggestionSection && (
-                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3">
-                          <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-2">
+                        <div className="mt-3 pt-3 border-t border-slate-200">
+                          <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-1">
                             Self Rating
                           </p>
                           {q.selfRating != null
@@ -473,34 +507,49 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
                       )}
                     </div>
 
-                    {/* L1 remark — shown to L2 and VIEW_ONLY */}
+                    {/* ── Row 2: L1 remark — L2 / VIEW_ONLY only ── */}
                     {approverLevel !== "L1" && (l1Remark || l1Rating != null) && (
-                      <div className="bg-teal-50 border border-teal-100 rounded-xl p-3">
-                        <p className="text-[10px] font-bold text-teal-500 uppercase tracking-wider mb-1">
+                      <div className="bg-teal-50 border border-teal-100 rounded-xl p-3 space-y-2">
+                        <p className="text-[10px] font-bold text-teal-500 uppercase tracking-wider">
                           Manager Remark (L1)
                         </p>
-                        {l1Remark && <p className="text-sm text-teal-800 mb-2">{l1Remark}</p>}
+                        <p className="text-sm text-teal-800 whitespace-pre-wrap leading-relaxed">
+                          {l1Remark || <span className="italic text-slate-300">No remark</span>}
+                        </p>
                         {!isSuggestionSection && l1Rating != null && (
-                          <RatingInput value={l1Rating} readonly />
+                          <div className="pt-2 border-t border-teal-100">
+                            <p className="text-[10px] font-bold text-teal-400 uppercase tracking-wider mb-1">
+                              L1 Rating
+                            </p>
+                            <RatingInput value={l1Rating} readonly />
+                          </div>
                         )}
                       </div>
                     )}
 
-                    {/* L2 remark — view only after submitted/published */}
-                    {(isViewOnly || (approverLevel === "L2" && (submitted || isPublishedOrClosed))) &&
-                      (l2Remark || l2Rating != null) && (
-                      <div className="bg-purple-50 border border-purple-100 rounded-xl p-3">
-                        <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider mb-1">
+                    {/* ── Row 3: L2 remark — PUBLISHED/CLOSED மட்டும் ── */}
+                    {isPublishedOrClosed && (l2Remark || l2Rating != null) && (
+                      <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 space-y-2">
+                        <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider">
                           Final Remark (L2)
                         </p>
-                        {l2Remark && <p className="text-sm text-purple-800 mb-2">{l2Remark}</p>}
+                        {l2Remark && (
+                          <p className="text-sm text-purple-800 whitespace-pre-wrap leading-relaxed">
+                            {l2Remark}
+                          </p>
+                        )}
                         {!isSuggestionSection && l2Rating != null && (
-                          <RatingInput value={l2Rating} readonly />
+                          <div className="pt-2 border-t border-purple-100">
+                            <p className="text-[10px] font-bold text-purple-400 uppercase tracking-wider mb-1">
+                              L2 Rating
+                            </p>
+                            <RatingInput value={l2Rating} readonly />
+                          </div>
                         )}
                       </div>
                     )}
 
-                    {/* Reviewer input */}
+                    {/* ── Row 4: Reviewer input ── */}
                     {isActiveReviewer && (
                       <div className={`border rounded-xl p-4 space-y-3 ${
                         isMissing ? "bg-rose-50 border-rose-200" : "bg-amber-50 border-amber-100"
@@ -556,7 +605,7 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
         </div>
       )}
 
-      {/* Overall remark — visible on ALL sections for active reviewers */}
+      {/* Overall remark */}
       {isActiveReviewer && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-3">
           <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
@@ -572,7 +621,7 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
         </div>
       )}
 
-      {/* Approval timeline — always visible */}
+      {/* Approval timeline */}
       {detail.statusHistory.length > 0 && (
         <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
           <ApprovalTimeline history={detail.statusHistory} />
@@ -591,7 +640,6 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
 
         <div className="flex gap-2 flex-wrap items-center">
 
-          {/* Save Draft — available on every section for active reviewers */}
           {isActiveReviewer && (
             <button
               onClick={handleSaveDraft}
@@ -603,7 +651,6 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
             </button>
           )}
 
-          {/* Reject — L1 always on last section; L2 only BEFORE saving (l2CanEdit) */}
           {approverLevel === "L1" && !isViewOnly && isLastSection && (
             <button
               onClick={() => handleActionClick(false)}
@@ -626,7 +673,6 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
             </button>
           )}
 
-          {/* Next section — NO validation */}
           {!isLastSection && (
             <button
               onClick={handleNextSection}
@@ -636,7 +682,6 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
             </button>
           )}
 
-          {/* L1: Preview & Submit → triggers L2 */}
           {approverLevel === "L1" && !isViewOnly && isLastSection && (
             <button
               onClick={() => handleActionClick(true)}
@@ -651,7 +696,6 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
             </button>
           )}
 
-          {/* L2: Preview & Save */}
           {approverLevel === "L2" && l2CanEdit && isLastSection && (
             <button
               onClick={() => handleActionClick(true)}
@@ -666,7 +710,6 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
             </button>
           )}
 
-          {/* L2: Preview & Publish */}
           {canPublish && isLastSection && (
             <button
               onClick={() => handleActionClick(true, true)}
@@ -677,7 +720,6 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
             </button>
           )}
 
-          {/* View-only indicator */}
           {isViewOnly && isLastSection && (
             <span className="px-4 py-3 text-xs text-slate-400 font-medium">
               {detail.status === "PUBLISHED" ? "✓ Published" : "View only"}
