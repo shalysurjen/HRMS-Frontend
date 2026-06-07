@@ -28,10 +28,14 @@ import AttendanceReports from "@/features/attendance/pages/AttendanceReports";
 import PolicyConfig from "../admin/pages/PolicyConfig";
 import { CFOEmployeesPage } from "@/features/payroll/pages/Cfoemployeepage";
 import { PayslipPage } from "@/features/payroll/pages/PayslipPage";
+import AdminAppraisalCyclePage from "@/features/appraisal/pages/AdminAppraisalCyclePage";
 
 /* SELF APPRAISAL */
 import SelfAppraisalPage from "@/features/appraisal/pages/SelfAppraisalPage";
 import AppraisalDashboardPage from "@/features/appraisal/pages/AppraisalDashboardPage";
+
+/* LEAVE EXPORT */
+import LeaveExportPage from "@/features/leave/pages/LeaveExportPage";
 
 const DashboardRoutes = () => {
   const { user } = useAuth();
@@ -83,6 +87,9 @@ const DashboardRoutes = () => {
       <Route path="attendance-reports" element={<AttendanceReports />} />
       <Route path="policies"           element={<PolicyConfig />} />
 
+      {/* ADMIN APPRAISAL CYCLE */}
+      <Route path="admin/appraisal-cycles" element={<AdminAppraisalCyclePage />} />
+
       {/* PAYROLL */}
       <Route path="payslip" element={<PayrollView />} />
 
@@ -105,6 +112,9 @@ const DashboardRoutes = () => {
       {/* SELF APPRAISAL */}
       <Route path="self-appraisal"   element={<SelfAppraisalPage />} />
       <Route path="appraisal-reviews" element={<AppraisalDashboardPage />} />
+
+      {/* LEAVE EXPORT — Admin sees all employees, Manager sees team only */}
+      <Route path="leave-export" element={<LeaveExportPage />} />
 
       {/* DEFAULT — use absolute path to prevent nested redirect loop */}
       <Route path="*" element={<Navigate to={`${basePath}/dashboard`} replace />} />

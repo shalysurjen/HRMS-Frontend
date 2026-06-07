@@ -41,4 +41,3 @@ export interface AdminAttendanceExportRequest {
   fromDate?: string;
   toDate?: string;
 }
-

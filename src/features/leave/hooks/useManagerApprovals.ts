@@ -8,6 +8,10 @@ import { useEffect, useState } from "react";
 export const useManagerApprovals = (userId: string, role?: string) => {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  // Separate loading state for approve/reject actions
+  // Using loading=true for actions causes full-page blank screen (PendingApprovalsView
+  // renders <CustomLoader/> when loading=true, wiping the entire action center).
+  const [actionLoading, setActionLoading] = useState(false);
 
   const fetchRequests = async () => {
     if (!userId) return;
@@ -110,7 +114,7 @@ export const useManagerApprovals = (userId: string, role?: string) => {
     type?: LeaveType | string,
   ) => {
     try {
-      setLoading(true);
+      setActionLoading(true);
 
       // ── WFH decision ───────────────────────────────────────────
       if (type === 'WFH') {
@@ -154,7 +158,7 @@ export const useManagerApprovals = (userId: string, role?: string) => {
       console.error(`Decision error for ${type || 'LEAVE'}:`, err);
       return { success: false, error: err };
     } finally {
-      setLoading(false);
+      setActionLoading(false);
     }
   };
 
@@ -181,6 +185,7 @@ export const useManagerApprovals = (userId: string, role?: string) => {
   return {
     requests,
     loading,
+    actionLoading,
     handleDecision,
     handleCompOffApprove,
     handleCompOffReject,

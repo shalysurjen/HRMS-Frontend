@@ -17,15 +17,12 @@ const handleDownload = (data: Blob, filename: string) => {
 export const attendanceService = {
     getEmployeeCalendar: async (employeeId: string): Promise<TeamCalendarResponse> => {
         const response = await api.get(`/v1/dashboard/employee/calendar/${employeeId}`);
-        // console.log("employee calender" + response);
         return response.data;
     },
     getTeamCalendar: async (id: string): Promise<TeamCalendarResponse> => {
         const response = await api.get<TeamCalendarResponse>(
             `/v1/dashboard/team-calendar/${id}`
         );
-        // console.log("team calanedr " + response);
-
         return response.data;
     },
 
@@ -95,27 +92,24 @@ export const attendanceService = {
     downloadAttendanceExcel: async (
         empId: string,
         params: {
-            fromDate?: string; // Optional
-            toDate?: string;   // Optional
+            fromDate?: string;
+            toDate?: string;
         }
     ): Promise<void> => {
         const response = await api.get(`/v1/attendance/download/excel/${empId}`, {
-            params: {// Mapping frontend empId to backend employeeId param
+            params: {
                 ...params
             },
-            responseType: 'blob', // CRITICAL: Tells axios to treat response as binary
+            responseType: 'blob',
         });
 
-        // Create a URL for the downloaded file
         const url = window.URL.createObjectURL(new Blob([response.data]));
         const link = document.createElement('a');
         link.href = url;
 
-        // Set suggested filename
         const dateStr = params.fromDate || new Date().toISOString().split('T')[0];
         link.setAttribute('download', `Attendance_${empId}_${dateStr}.xlsx`);
 
-        // Append to body, click to trigger download, then clean up
         document.body.appendChild(link);
         link.click();
         link.remove();
@@ -129,7 +123,6 @@ export const attendanceService = {
         handleDownload(response.data, `Team_Attendance_${managerId}_${payload.fromDate || 'report'}.xlsx`);
     },
 
-    // NEW: Download Selection Report (POST)
     downloadSelectedEmployees: async (payload: AttendanceExportRequest) => {
         const response = await api.post(`/v1/attendance/download/selection`, payload, {
             responseType: 'blob',
@@ -138,11 +131,10 @@ export const attendanceService = {
     },
     downloadAllEmployeesAttendanceReport: async (payload: AdminAttendanceExportRequest) => {
         const response = await api.get(`/v1/attendance/download/all`, {
-            // Wrap your payload in 'params' so it is sent as query string parameters (?fromDate=...)
             params: payload,
             responseType: 'blob',
         });
 
         handleDownload(response.data, `Attendance_Selection_${payload.fromDate || 'report'}.xlsx`);
     },
-}
+};

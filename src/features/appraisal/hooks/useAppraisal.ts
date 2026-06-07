@@ -66,9 +66,25 @@ export const useAppraisal = () => {
     finally { setLoading(false); }
   };
 
+  // FIX: Full dashboard feed — L1 pending + ALL L2 records (view-only + actionable)
+  // Use this in AppraisalDashboardPage instead of loadPendingApprover
+  const loadAllForApprover = async (id: string) => {
+    setLoading(true); setError(null);
+    try { const d = await appraisalService.getAllForApprover(id); setSummaries(d); return d; }
+    catch (e: any) { setError(e?.response?.data?.message || "Failed"); return null; }
+    finally { setLoading(false); }
+  };
+
   const loadDetail = async (id: number) => {
     setLoading(true); setError(null);
     try { const d = await appraisalService.getDetail(id); setDetail(d); return d; }
+    catch (e: any) { setError(e?.response?.data?.message || "Failed"); return null; }
+    finally { setLoading(false); }
+  };
+
+  const loadPublished = async (empId: string, cycleId: number) => {
+    setLoading(true); setError(null);
+    try { const d = await appraisalService.getPublished(empId, cycleId); setDetail(d); return d; }
     catch (e: any) { setError(e?.response?.data?.message || "Failed"); return null; }
     finally { setLoading(false); }
   };
@@ -90,7 +106,7 @@ export const useAppraisal = () => {
   return {
     cycles, detail, summaries, loading, error,
     loadCycles, loadOrCreate, saveDraft, submitFinal,
-    loadHistory, loadPendingL1, loadPendingL2, loadPendingApprover,
-    loadDetail, sendRemarks, loadAll,
+    loadHistory, loadPendingL1, loadPendingL2, loadPendingApprover, loadAllForApprover,
+    loadDetail, loadPublished, sendRemarks, loadAll,
   };
 };

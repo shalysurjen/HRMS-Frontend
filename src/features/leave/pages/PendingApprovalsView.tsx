@@ -22,6 +22,7 @@ const PendingApprovalsView: React.FC = () => {
     const {
         requests,
         loading,
+        actionLoading,
         handleDecision,
     } = useManagerApprovals(user!.id, user?.role);
 
@@ -103,6 +104,9 @@ const PendingApprovalsView: React.FC = () => {
             ? 'PERMISSION'
             : req.leaveTypeName;
 
+        // Close dialog immediately — actionLoading spinner shows inline
+        setDialogConfig({ isOpen: false, req: null, status: null });
+
         const result = await handleDecision(
             req.id,
             status,
@@ -112,8 +116,9 @@ const PendingApprovalsView: React.FC = () => {
 
         if (result?.success) {
             notify.leaveAction(status, req.employeeName, !!req.isCompOff, !!req.isOD);
-            setDialogConfig({ isOpen: false, req: null, status: null });
         }
+        // On failure, error toast already shown by response interceptor.
+        // The request stays in the list (not removed) so COO can retry.
     };
 
     if (loading) return (
@@ -127,7 +132,16 @@ const PendingApprovalsView: React.FC = () => {
     }
 
     return (
-        <div className='flex flex-col gap-4 w-full max-w-full overflow-x-hidden'>
+        <div className='relative flex flex-col gap-4 w-full max-w-full overflow-x-hidden'>
+            {/* Action in-progress overlay — does NOT blank the page, just dims it */}
+            {actionLoading && (
+                <div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-[1px] flex items-center justify-center rounded-sm pointer-events-all">
+                    <div className="flex flex-col items-center gap-2">
+                        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Processing…</span>
+                    </div>
+                </div>
+            )}
 
             {/* ── Leave detail modal (unchanged) ──────────────────── */}
             <DetailedRequestModal

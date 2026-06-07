@@ -220,6 +220,21 @@ export const useEmployee = () => {
         }
     }, []);
 
+    const getTeamMembersPaged = useCallback(async (employeeId: string, page: number, size: number) => {
+        setLoading(true);
+        try {
+            const response = await employeeService.getTeamMembersPaged(employeeId, page, size);
+            return response;
+        } catch (err: any) {
+            const message = err.message || "Failed to fetch team members";
+            setError(message);
+            console.error(message);
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
     const fetchTeamMembers = useCallback(async (employeeId: string): Promise<TeamMember[]> => {
         setLoading(true);
         setError(null);
@@ -258,6 +273,7 @@ export const useEmployee = () => {
         updateUser,
         deleteUser,
         getTeamMembers,
+        getTeamMembersPaged,
         fetchTeamMembers,
         fetchEmployeeProfile,
         profile,

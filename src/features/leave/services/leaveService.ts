@@ -148,4 +148,45 @@ export const leaveService = {
     const response = await api.get(`/v1/dashboard/team-on-leave/${managerId}`);
     return response.data;
   },
+
+  // ── Leave Export ─────────────────────────────────────────────────
+
+  getLeaveExportAll: async (params: { fromDate: string; toDate: string }) => {
+    const response = await api.get('/v1/leaves/export/all', { params });
+    return response.data;
+  },
+
+  getLeaveExportForTeam: async (payload: { empIds: string[]; fromDate: string; toDate: string }) => {
+    const response = await api.post('/v1/leaves/export/team', payload);
+    return response.data;
+  },
+
+  downloadLeaveExportAll: async (params: { fromDate: string; toDate: string }): Promise<void> => {
+    const response = await api.get('/v1/leaves/export/download/all', {
+      params,
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Employee_Leave_Export_${params.fromDate}_to_${params.toDate}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
+  downloadLeaveExportTeam: async (payload: { empIds: string[]; fromDate: string; toDate: string }): Promise<void> => {
+    const response = await api.post('/v1/leaves/export/download/team', payload, {
+      responseType: 'blob',
+    });
+    const url = window.URL.createObjectURL(new Blob([response.data]));
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Team_Leave_Export_${payload.fromDate}_to_${payload.toDate}.xlsx`);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+  },
 }

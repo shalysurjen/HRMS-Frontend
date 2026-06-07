@@ -1,7 +1,8 @@
 import api from "@/services/apiClient";
 import { useEmployee } from "@/features/employee/hooks/useEmployee";
+import { useAuth } from "@/shared/auth/useAuth";
 import React, { useEffect, useState } from "react";
-import { FaTimes } from "react-icons/fa";
+import { FaTimes, FaCheckCircle } from "react-icons/fa";
 
 interface PermissionDetailModalProps {
     isOpen: boolean;
@@ -17,6 +18,7 @@ const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
     onAction,
 }) => {
     const { fetchEmployeeName } = useEmployee();
+    const { user } = useAuth();
     const [firstApproverName, setFirstApproverName] = useState("Loading...");
     const [secondApproverName, setSecondApproverName] = useState("");
 
@@ -40,6 +42,29 @@ const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
     }, [req]);
 
     if (!isOpen || !req) return null;
+
+    // All possible user identifiers (employeeCode may be undefined, id is reliable)
+    const userCodes = [user?.employeeCode, user?.id].filter(Boolean);
+    const isCurrentApprover = (approverId: string | null | undefined): boolean => {
+        if (!approverId) return false;
+        return userCodes.some(code => code === approverId);
+    };
+
+    const canReview =
+        req.status === "PENDING" &&
+        !!user &&
+        (() => {
+            if (req.currentApproverId) {
+                return isCurrentApprover(req.currentApproverId);
+            }
+            if (!req.firstApproverDecision || req.firstApproverDecision === "PENDING") {
+                return isCurrentApprover(req.firstApproverId);
+            }
+            if (req.firstApproverDecision === "APPROVED" && req.secondApproverId) {
+                return isCurrentApprover(req.secondApproverId);
+            }
+            return false;
+        })();
 
     const showSecondLevel =
         !!req.secondApproverId && req.firstApproverDecision !== "REJECTED";
@@ -130,7 +155,7 @@ const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                                 Period
                             </p>
                             <p className="text-sm font-bold text-slate-800">
-                                {req.permissionDate}
+                                {req.permissionDate ? formatDate(req.permissionDate) : (req.startDate ? formatDate(req.startDate) : "—")}
                             </p>
                             <p className="text-[10px] text-indigo-500 font-bold">
                                 {req.startTime} – {req.endTime}
@@ -146,8 +171,8 @@ const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">
                             Reason for Permission
                         </p>
-                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-                            <p className="text-sm text-slate-600 italic">
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 max-h-32 overflow-y-auto">
+                            <p className="text-sm text-slate-600 italic break-words whitespace-pre-wrap">
                                 "{req.reason || "No reason provided."}"
                             </p>
                         </div>
@@ -274,25 +299,34 @@ const PermissionDetailModal: React.FC<PermissionDetailModalProps> = ({
                 </div>
 
                 {/* Footer — Action buttons */}
-                {req.status === "PENDING" && (
-                    <div className="flex gap-3 px-6 py-5 border-t border-slate-100 bg-slate-50/50">
-                        <button
-                            onClick={() => onAction("REJECTED")}
-                            className="flex-1 py-3 border-2 border-rose-400 text-rose-500 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-rose-50 transition-all"
-                        >
-                            Decline Request
-                        </button>
-                        <button
-                            onClick={() => onAction("APPROVED")}
-                            className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-all"
-                        >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                            </svg>
-                            Approve Application
-                        </button>
-                    </div>
-                )}
+                <div className="px-6 py-5 border-t border-slate-100 bg-slate-50/50">
+                    {canReview ? (
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => onAction("REJECTED")}
+                                className="flex-1 py-3 border-2 border-rose-400 text-rose-500 font-black text-xs uppercase tracking-widest rounded-xl hover:bg-rose-50 transition-all"
+                            >
+                                Decline Request
+                            </button>
+                            <button
+                                onClick={() => onAction("APPROVED")}
+                                className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-200 transition-all"
+                            >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                </svg>
+                                Approve Application
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-center gap-2 text-slate-500 bg-slate-100/50 py-4 rounded-xl border border-dashed border-slate-300">
+                            <FaCheckCircle className={req.status === "REJECTED" ? "text-rose-400" : "text-emerald-500"} />
+                            <span className="text-sm font-semibold uppercase tracking-widest">
+                                Decision Recorded
+                            </span>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );
