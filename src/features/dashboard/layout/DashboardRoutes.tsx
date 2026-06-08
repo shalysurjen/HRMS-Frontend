@@ -109,8 +109,9 @@ const DashboardRoutes = () => {
       {/* BIRTHDAY */}
       <Route path="birthday" element={<BirthdayPage />} />
 
-      {/* SELF APPRAISAL */}
-      <Route path="self-appraisal"   element={<SelfAppraisalPage />} />
+      {/* SELF APPRAISAL — Employee fills form (has built-in cycle selection step) */}
+      <Route path="self-appraisal"    element={<SelfAppraisalPage />} />
+      {/* APPRAISAL REVIEWS — L1/L2 managers: All / Pending / Published dashboard */}
       <Route path="appraisal-reviews" element={<AppraisalDashboardPage />} />
 
       {/* LEAVE EXPORT — Admin sees all employees, Manager sees team only */}
