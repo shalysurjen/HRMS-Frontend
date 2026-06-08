@@ -36,6 +36,7 @@ interface SidebarProps {
 interface Tab {
   name: string;
   path: string;
+  absolutePath?: string; // if set, navigate to this directly (skip basePath prefix)
   icon: JSX.Element;
   roles: string[];
 }
@@ -80,12 +81,12 @@ function Sidebar({ isOpen, setIsOpen, isCollapsed, setIsCollapsed }: SidebarProp
     { name: "Policy Config",      path: "policies",           icon: <FaFileSignature />,       roles: ["ADMIN"] },
     { name: "Attendance Reports", path: "attendance-reports", icon: <FaCalendarCheck />,       roles: ["MANAGER","TEAM_LEADER","HR","ADMIN","COO","CTO","CFO","CEO"] },
     { name: "Pay Slip",           path: "payslip",            icon: <FaMoneyBillWave />,       roles: ["EMPLOYEE","MANAGER","TEAM_LEADER","HR","ADMIN","COO","CTO","CEO"] },
-    // Self Appraisal — COO and CFO NOT in roles (they use Appraisal Reviews instead)
-    { name: "Self Appraisal",     path: "self-appraisal",     icon: <FaClipboardList />,       roles: ["EMPLOYEE","MANAGER","TEAM_LEADER","HR","ADMIN","CTO"] },
-    // Appraisal Reviews — for approvers + COO (view all) + CFO (view all)
-    { name: "Appraisal Reviews",  path: "appraisal-reviews",        icon: <FaClipboardList />,       roles: ["MANAGER","COO","CFO","CTO"] },
+    // Self Appraisal — All roles except COO and CFO
+    { name: "Self Appraisal",     path: "self-appraisal",     icon: <FaClipboardList />,       roles: ["EMPLOYEE", "MANAGER", "TEAM_LEADER", "CTO", "HR", "ADMIN", "CEO"] },
+    // Appraisal Reviews — L1/L2 managers go directly to the dashboard (All/Pending/Published)
+    { name: "Appraisal Reviews",  path: "appraisal-reviews",  icon: <FaClipboardList />,       roles: ["MANAGER","COO","CFO","CTO","TEAM_LEADER","ADMIN","HR"] },
     // Admin: cycle enable/disable only
-    { name: "Appraisal Cycles",   path: "admin/appraisal-cycles",   icon: <FaCalendarAlt />,         roles: ["ADMIN","HR"] },
+    { name: "Appraisal Cycles",   path: "admin/appraisal-cycles", absolutePath: "/admin/appraisal-cycles", icon: <FaCalendarAlt />,      roles: ["ADMIN","HR"] },
     // { name: "Leave Export",       path: "leave-export",        icon: <FaFileExcel />,           roles: ["ADMIN","MANAGER","HR","CTO","COO"] },
   ];
 
@@ -93,8 +94,17 @@ function Sidebar({ isOpen, setIsOpen, isCollapsed, setIsCollapsed }: SidebarProp
     userRole ? tab.roles.includes(userRole) : false
   );
 
-  const handleNavigate = (path: string) => {
-    const finalPath = path === "portal" ? "/portal" : `${basePath}/${path}`;
+  const handleNavigate = (tabOrPath: Tab | string) => {
+    let finalPath: string;
+    if (typeof tabOrPath === "string") {
+      finalPath = tabOrPath === "portal" ? "/portal" : `${basePath}/${tabOrPath}`;
+    } else {
+      finalPath = tabOrPath.absolutePath
+        ? tabOrPath.absolutePath
+        : tabOrPath.path === "portal"
+        ? "/portal"
+        : `${basePath}/${tabOrPath.path}`;
+    }
     navigate(finalPath);
     if (window.innerWidth < 768) setIsOpen(false);
   };
@@ -167,11 +177,13 @@ function Sidebar({ isOpen, setIsOpen, isCollapsed, setIsCollapsed }: SidebarProp
 
           <ul className="space-y-2">
             {visibleTabs.map((tab) => {
-              const isActive = location.pathname === `${basePath}/${tab.path}`;
+              const isActive = tab.absolutePath
+                ? location.pathname === tab.absolutePath
+                : location.pathname === `${basePath}/${tab.path}`;
               return (
                 <li
                   key={tab.path}
-                  onClick={() => handleNavigate(tab.path)}
+                  onClick={() => handleNavigate(tab)}
                   className={`group relative flex items-center ${isCollapsed ? "justify-center" : "gap-3"} px-4 py-3.5 rounded-xl cursor-pointer transition-all
                     ${isActive
                       ? "bg-brand text-white"
