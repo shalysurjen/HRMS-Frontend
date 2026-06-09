@@ -50,9 +50,9 @@ const LaunchPage: React.FC = () => {
     return date.toLocaleDateString();
   };
 
-  const handleNavigate = (path: string) => {
-    navigate(`${basePath}/${path}`);
-  };
+  // const handleNavigate = (path: string) => {
+  //   navigate(`${basePath}/${path}`);
+  // };
 
   const goToProfile = () => {
     navigate("/profile");
