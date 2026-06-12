@@ -557,7 +557,7 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
                     )}
 
                     {/* ── Row 3: L2 remark — PUBLISHED/CLOSED மட்டும் ── */}
-                    {isPublishedOrClosed && (l2Remark || l2Rating != null) && (
+                   {(isPublishedOrClosed || detail.status === "FINAL_REVIEW") && (l2Remark || l2Rating != null) && (
                       <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 space-y-2">
                         <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider">
                           Final Remark (L2)
