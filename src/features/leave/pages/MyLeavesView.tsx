@@ -551,6 +551,142 @@ const getPermissionNodeStatus = (decision: string | null | undefined): string | 
 };
 
 // ── Edit Permission Modal ─────────────────────────────────────────
+// ── TimePicker — exact same as PermissionRequestForm.tsx ─────────
+interface EditTimeValue { hour: number; minute: number; }
+const editPad = (n: number) => String(n).padStart(2, '0');
+const toEditMinutes = (t: EditTimeValue) => t.hour * 60 + t.minute;
+const EDIT_MIN_TOTAL = 9 * 60 + 15;   // 09:15
+const EDIT_MAX_TOTAL = 18 * 60 + 30;  // 18:30
+
+const EditTimePicker = ({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: EditTimeValue;
+  onChange: (v: EditTimeValue) => void;
+}) => {
+  const [editingHour,   setEditingHour]   = useState(false);
+  const [editingMinute, setEditingMinute] = useState(false);
+  const [hourInput,     setHourInput]     = useState('');
+  const [minuteInput,   setMinuteInput]   = useState('');
+
+  const isAM = value.hour < 12;
+  const displayHour = value.hour === 0 ? 12 : value.hour > 12 ? value.hour - 12 : value.hour;
+
+  const clampToRange = (h: number, m: number): EditTimeValue => {
+    const total = Math.min(Math.max(h * 60 + m, EDIT_MIN_TOTAL), EDIT_MAX_TOTAL);
+    return { hour: Math.floor(total / 60), minute: total % 60 };
+  };
+
+  const incrementHour   = () => onChange(clampToRange(value.hour + 1, value.minute));
+  const decrementHour   = () => onChange(clampToRange(value.hour - 1, value.minute));
+  const incrementMinute = () => onChange(clampToRange(value.hour, value.minute + 1));
+  const decrementMinute = () => onChange(clampToRange(value.hour, value.minute - 1));
+
+  const handleHourClick = () => { setEditingHour(true); setHourInput(''); };
+  const commitHour = () => {
+    const parsed = parseInt(hourInput);
+    if (!isNaN(parsed)) {
+      let h = parsed;
+      if (h >= 1 && h <= 12) {
+        h = isAM ? (h === 12 ? 0 : h) : h === 12 ? 12 : h + 12;
+      }
+      onChange(clampToRange(h, value.minute));
+    }
+    setEditingHour(false); setHourInput('');
+  };
+  const handleMinuteClick = () => { setEditingMinute(true); setMinuteInput(''); };
+  const commitMinute = () => {
+    const parsed = parseInt(minuteInput);
+    if (!isNaN(parsed)) onChange(clampToRange(value.hour, parsed));
+    setEditingMinute(false); setMinuteInput('');
+  };
+  const toggleAMPM = () => {
+    const newHour = isAM ? value.hour + 12 : value.hour - 12;
+    onChange(clampToRange(newHour, value.minute));
+  };
+
+  const atMin = toEditMinutes(value) <= EDIT_MIN_TOTAL;
+  const atMax = toEditMinutes(value) >= EDIT_MAX_TOTAL;
+
+  return (
+    <div className="flex flex-col gap-2">
+      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+        <HiOutlineClock size={13} />
+        {label}
+      </label>
+      <div className="inline-flex items-end gap-3 border border-slate-200 rounded-xl px-5 py-4 bg-white shadow-sm w-fit">
+        {/* Hours */}
+        <div className="flex flex-col items-center gap-1.5">
+          <button type="button" onClick={incrementHour} disabled={atMax}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-400 transition text-sm font-black disabled:opacity-20 disabled:cursor-not-allowed">▲</button>
+          {editingHour ? (
+            <input autoFocus type="text" value={hourInput} maxLength={2}
+              onChange={(e) => setHourInput(e.target.value.replace(/\D/g, ''))}
+              onBlur={commitHour}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Tab') commitHour(); }}
+              className="w-12 text-center text-2xl font-black text-indigo-600 outline-none border-b-2 border-indigo-400 bg-transparent" />
+          ) : (
+            <span onClick={handleHourClick} title="Click to type"
+              className="w-12 text-center text-2xl font-black text-slate-800 cursor-text hover:text-indigo-600 transition select-none">
+              {editPad(displayHour)}
+            </span>
+          )}
+          <button type="button" onClick={decrementHour} disabled={atMin}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-400 transition text-sm font-black disabled:opacity-20 disabled:cursor-not-allowed">▼</button>
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Hours</span>
+        </div>
+
+        <span className="text-2xl font-black text-slate-300 mb-7">:</span>
+
+        {/* Minutes */}
+        <div className="flex flex-col items-center gap-1.5">
+          <button type="button" onClick={incrementMinute} disabled={atMax}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-400 transition text-sm font-black disabled:opacity-20 disabled:cursor-not-allowed">▲</button>
+          {editingMinute ? (
+            <input autoFocus type="text" value={minuteInput} maxLength={2}
+              onChange={(e) => setMinuteInput(e.target.value.replace(/\D/g, ''))}
+              onBlur={commitMinute}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Tab') commitMinute(); }}
+              className="w-12 text-center text-2xl font-black text-indigo-600 outline-none border-b-2 border-indigo-400 bg-transparent" />
+          ) : (
+            <span onClick={handleMinuteClick} title="Click to type"
+              className="w-12 text-center text-2xl font-black text-slate-800 cursor-text hover:text-indigo-600 transition select-none">
+              {editPad(value.minute)}
+            </span>
+          )}
+          <button type="button" onClick={decrementMinute} disabled={atMin}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-indigo-50 hover:text-indigo-600 text-slate-400 transition text-sm font-black disabled:opacity-20 disabled:cursor-not-allowed">▼</button>
+          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest mt-1">Minutes</span>
+        </div>
+
+        {/* AM/PM */}
+        <div className="mb-7 ml-1">
+          <button type="button" onClick={toggleAMPM}
+            className={`text-[11px] font-black px-2.5 py-1.5 rounded-lg border transition-all ${
+              isAM
+                ? 'bg-indigo-50 text-indigo-600 border-indigo-100 hover:bg-indigo-100'
+                : 'bg-amber-50 text-amber-600 border-amber-100 hover:bg-amber-100'
+            }`}>
+            {isAM ? 'AM' : 'PM'}
+          </button>
+        </div>
+      </div>
+      <p className="text-[9px] text-slate-400 font-medium">Allowed: 09:15 AM – 06:30 PM</p>
+    </div>
+  );
+};
+
+// ── Parse "HH:MM" string → EditTimeValue ──────────────────────────
+const parseTimeStr = (str: string, fallback: EditTimeValue): EditTimeValue => {
+  if (!str) return fallback;
+  const parts = str.split(':').map(Number);
+  if (parts.length < 2 || isNaN(parts[0]) || isNaN(parts[1])) return fallback;
+  return { hour: parts[0], minute: parts[1] };
+};
+
 const EditPermissionModal = ({
   isOpen,
   permission,
@@ -568,46 +704,47 @@ const EditPermissionModal = ({
   }) => Promise<void>;
 }) => {
   const [permissionDate, setPermissionDate] = useState('');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
+  const [startTime, setStartTime] = useState<EditTimeValue>({ hour: 9, minute: 15 });
+  const [endTime,   setEndTime]   = useState<EditTimeValue>({ hour: 10, minute: 15 });
   const [reason, setReason] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error,  setError]  = useState('');
 
   useEffect(() => {
     if (permission) {
       setPermissionDate(permission.permissionDate || '');
-      setStartTime(permission.startTime || '');
-      setEndTime(permission.endTime || '');
+      setStartTime(parseTimeStr(permission.startTime, { hour: 9, minute: 15 }));
+      setEndTime(parseTimeStr(permission.endTime, { hour: 10, minute: 15 }));
       setReason(permission.reason || '');
       setError('');
     }
   }, [permission]);
 
-  // ── Auto-calculate total hours ─────────────────────────────────
-  const totalHours = useMemo(() => {
-    if (!startTime || !endTime) return '';
-    const [sh, sm] = startTime.split(':').map(Number);
-    const [eh, em] = endTime.split(':').map(Number);
-    const totalMins = (eh * 60 + em) - (sh * 60 + sm);
-    if (totalMins <= 0) return '';
-    const h = Math.floor(totalMins / 60);
-    const m = totalMins % 60;
-    if (h === 0) return `${m} mins`;
+  // ── Duration display ───────────────────────────────────────────
+  const diff = toEditMinutes(endTime) - toEditMinutes(startTime);
+  const isValidDuration = diff > 0;
+  const durationLabel = useMemo(() => {
+    if (diff <= 0) return '';
+    const h = Math.floor(diff / 60);
+    const m = diff % 60;
+    if (h === 0) return `${m} min${m > 1 ? 's' : ''}`;
     if (m === 0) return `${h} hr${h > 1 ? 's' : ''}`;
-    return `${h} hr${h > 1 ? 's' : ''} ${m} mins`;
-  }, [startTime, endTime]);
+    return `${h} hr${h > 1 ? 's' : ''} ${m} min${m > 1 ? 's' : ''}`;
+  }, [diff]);
 
   const handleSave = async () => {
     if (!permissionDate) { setError('Please select a date.'); return; }
-    if (!startTime) { setError('Please enter start time.'); return; }
-    if (!endTime) { setError('Please enter end time.'); return; }
-    if (!totalHours) { setError('End time must be after start time.'); return; }
+    if (!isValidDuration) { setError('End time must be after start time.'); return; }
     if (!reason.trim()) { setError('Please enter a reason.'); return; }
     setError('');
     setSaving(true);
     try {
-      await onSave({ permissionDate, startTime, endTime, reason: reason.trim() });
+      await onSave({
+        permissionDate,
+        startTime: `${editPad(startTime.hour)}:${editPad(startTime.minute)}:00`,
+        endTime:   `${editPad(endTime.hour)}:${editPad(endTime.minute)}:00`,
+        reason: reason.trim(),
+      });
     } finally {
       setSaving(false);
     }
@@ -615,29 +752,13 @@ const EditPermissionModal = ({
 
   if (!isOpen || !permission) return null;
 
-  // ── Generate hour and minute options for selects ───────────────
-  const hourOptions = Array.from({ length: 24 }, (_, i) =>
-    String(i).padStart(2, '0')
-  );
-  const minuteOptions = ['00', '15', '30', '45'];
-
-  const startHH = startTime.split(':')[0] || '09';
-  const startMM = startTime.split(':')[1] || '00';
-  const endHH = endTime.split(':')[0] || '10';
-  const endMM = endTime.split(':')[1] || '00';
-
-  const handleStartChange = (hh: string, mm: string) => setStartTime(`${hh}:${mm}`);
-  const handleEndChange = (hh: string, mm: string) => setEndTime(`${hh}:${mm}`);
-
   return (
     <AnimatePresence>
       {isOpen && (
         <>
           {/* Backdrop */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm"
             onClick={onClose}
           />
@@ -647,32 +768,30 @@ const EditPermissionModal = ({
             initial={{ opacity: 0, scale: 0.96, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 10 }}
-            transition={{ duration: 0.18, ease: "easeOut" }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             className="fixed inset-0 z-50 flex items-center justify-center p-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-white rounded-sm shadow-2xl w-full max-w-md border border-slate-200">
+            <div className="bg-white rounded-sm shadow-2xl w-full max-w-lg border border-slate-200 max-h-[90vh] flex flex-col">
 
               {/* Header */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-slate-100 shrink-0">
                 <h2 className="text-sm font-black uppercase tracking-widest text-slate-800">
                   Edit Permission Request
                 </h2>
-                <button
-                  onClick={onClose}
-                  className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-sm hover:bg-slate-100"
-                >
+                <button onClick={onClose}
+                  className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-sm hover:bg-slate-100">
                   <FaTimes size={14} />
                 </button>
               </div>
 
-              {/* Body */}
-              <div className="px-6 py-6 space-y-5">
+              {/* Body — scrollable */}
+              <div className="px-6 py-6 space-y-6 overflow-y-auto flex-1">
 
-                {/* Date */}
+                {/* 01. Date */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                    Date
+                    01. Date
                   </label>
                   <input
                     type="date"
@@ -682,94 +801,48 @@ const EditPermissionModal = ({
                   />
                 </div>
 
-                {/* Start Time + End Time — FIXED: HH MM dropdowns ──── */}
-                <div className="grid grid-cols-2 gap-4">
-
-                  {/* Start Time */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                      Start Time
-                    </label>
-                    <div className="flex items-center gap-1 border border-slate-200 rounded-sm bg-slate-50 px-3 py-2.5 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400 transition-all">
-                      {/* Hours */}
-                      <select
-                        value={startHH}
-                        onChange={(e) => handleStartChange(e.target.value, startMM)}
-                        className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none cursor-pointer"
-                      >
-                        {hourOptions.map(h => (
-                          <option key={h} value={h}>{h}</option>
-                        ))}
-                      </select>
-                      <span className="text-slate-400 font-black text-sm">:</span>
-                      {/* Minutes */}
-                      <select
-                        value={startMM}
-                        onChange={(e) => handleStartChange(startHH, e.target.value)}
-                        className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none cursor-pointer"
-                      >
-                        {minuteOptions.map(m => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* End Time */}
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                      End Time
-                    </label>
-                    <div className="flex items-center gap-1 border border-slate-200 rounded-sm bg-slate-50 px-3 py-2.5 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-400 transition-all">
-                      {/* Hours */}
-                      <select
-                        value={endHH}
-                        onChange={(e) => handleEndChange(e.target.value, endMM)}
-                        className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none cursor-pointer"
-                      >
-                        {hourOptions.map(h => (
-                          <option key={h} value={h}>{h}</option>
-                        ))}
-                      </select>
-                      <span className="text-slate-400 font-black text-sm">:</span>
-                      {/* Minutes */}
-                      <select
-                        value={endMM}
-                        onChange={(e) => handleEndChange(endHH, e.target.value)}
-                        className="bg-transparent text-sm font-bold text-slate-700 focus:outline-none cursor-pointer"
-                      >
-                        {minuteOptions.map(m => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                {/* 02. Start Time + 03. End Time — same pickers as Request Permission form */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <EditTimePicker
+                    label="02. Start Time"
+                    value={startTime}
+                    onChange={setStartTime}
+                  />
+                  <EditTimePicker
+                    label="03. End Time"
+                    value={endTime}
+                    onChange={setEndTime}
+                  />
                 </div>
 
-                {/* Total Hours — auto-calculated, read-only */}
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                    Total Hours
-                  </label>
-                  <div className={`w-full px-4 py-3 border rounded-sm text-sm font-black transition-all ${
-                    totalHours
-                      ? 'border-indigo-200 bg-indigo-50 text-indigo-600'
-                      : 'border-slate-200 bg-slate-100 text-slate-400'
-                  }`}>
-                    {totalHours || '—'}
+                {/* Duration display */}
+                {isValidDuration ? (
+                  <div className="flex items-center gap-3 p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                    <HiOutlineClock size={18} className="text-indigo-500 shrink-0" />
+                    <div>
+                      <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">
+                        Total Permission Duration
+                      </p>
+                      <p className="text-sm font-black text-indigo-700 mt-0.5">{durationLabel}</p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-100 rounded-xl">
+                    <HiOutlineClock size={15} className="text-rose-400 shrink-0" />
+                    <p className="text-xs font-semibold text-rose-500">End time must be after start time.</p>
+                  </div>
+                )}
 
-                {/* Reason */}
+                {/* 04. Reason */}
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                    Reason for Permission
+                    04. Reason
                   </label>
                   <textarea
                     rows={3}
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    placeholder="Enter reason..."
+                    placeholder="Briefly explain the reason for your permission request..."
                     className="w-full px-4 py-3 border border-slate-200 rounded-sm text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all resize-none bg-slate-50"
                   />
                 </div>
@@ -783,19 +856,13 @@ const EditPermissionModal = ({
               </div>
 
               {/* Footer */}
-              <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3">
-                <button
-                  onClick={onClose}
-                  disabled={saving}
-                  className="px-6 py-2.5 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-slate-800 transition-colors disabled:opacity-50"
-                >
+              <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 shrink-0">
+                <button onClick={onClose} disabled={saving}
+                  className="px-6 py-2.5 text-xs font-black uppercase tracking-widest text-slate-600 hover:text-slate-800 transition-colors disabled:opacity-50">
                   Cancel
                 </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-widest rounded-sm transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-                >
+                <button onClick={handleSave} disabled={saving || !isValidDuration}
+                  className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-widest rounded-sm transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2">
                   {saving ? (
                     <>
                       <svg className="animate-spin w-3 h-3" fill="none" viewBox="0 0 24 24">
@@ -804,9 +871,7 @@ const EditPermissionModal = ({
                       </svg>
                       Saving...
                     </>
-                  ) : (
-                    'Save Changes'
-                  )}
+                  ) : 'Save Changes'}
                 </button>
               </div>
 

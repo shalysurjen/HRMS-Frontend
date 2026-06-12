@@ -11,7 +11,6 @@ export interface TeamMemberBalance {
 
 export type TeamCalendarResponse = Record<string, TeamMemberBalance[]>;
 
-
 export interface AttendanceRecord {
   employeeId: string;
   employeeName: string;
@@ -22,7 +21,6 @@ export interface AttendanceRecord {
   workingHours: string;
   punchRecords: string | null;
 }
-
 
 export interface TeamAttendancePage {
   content: AttendanceRecord[];
@@ -37,7 +35,35 @@ export interface AttendanceExportRequest {
   fromDate?: string;
   toDate?: string;
 }
+
 export interface AdminAttendanceExportRequest {
   fromDate?: string;
   toDate?: string;
+}
+
+// ── New: one row per attendance date with all 13 columns ──────────────────────
+export interface AttendanceDetailedRow {
+  empId: string;
+  empName: string;
+  date: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  workHours: string | null;
+  cfLeaveDays: number | null;
+  glDays: number | null;
+  slDays: number | null;
+  wfhDays: number | null;
+  permissionHours: string | null;
+  lopDays: number | null;
+  attendanceStatus: string;
+  approvalStatus: string;
+  punchRecords: string | null;
+}
+
+export interface AttendanceDetailedPage {
+  content: AttendanceDetailedRow[];
+  totalPages: number;
+  totalElements: number;
+  size: number;
+  number: number;
 }

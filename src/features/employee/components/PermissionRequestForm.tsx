@@ -198,13 +198,16 @@ const TimePicker = ({
 const DurationDisplay = ({
   startTime,
   endTime,
+  touched,
 }: {
   startTime: TimeValue;
   endTime: TimeValue;
+  touched: boolean;
 }) => {
   const diff = toMinutes(endTime) - toMinutes(startTime);
 
-  if (diff <= 0) {
+  // Show error only after user touched a time
+  if (touched && diff <= 0) {
     return (
       <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-100 rounded-xl">
         <HiOutlineClock size={15} className="text-rose-400 shrink-0" />
@@ -218,6 +221,7 @@ const DurationDisplay = ({
   const hours   = Math.floor(diff / 60);
   const minutes = diff % 60;
 
+  // Box always visible; duration text shown only after user touches time
   return (
     <div className="flex items-center gap-3 p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
       <HiOutlineClock size={18} className="text-indigo-500 shrink-0" />
@@ -225,10 +229,12 @@ const DurationDisplay = ({
         <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">
           Total Permission Duration
         </p>
-        <p className="text-sm font-black text-indigo-700 mt-0.5">
-          {hours > 0 && `${hours} hr${hours > 1 ? "s" : ""} `}
-          {minutes > 0 && `${minutes} min${minutes > 1 ? "s" : ""}`}
-        </p>
+        {touched && diff > 0 && (
+          <p className="text-sm font-black text-indigo-700 mt-0.5">
+            {hours > 0 && `${hours} hr${hours > 1 ? "s" : ""} `}
+            {minutes > 0 && `${minutes} min${minutes > 1 ? "s" : ""}`}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -253,9 +259,10 @@ const PermissionRequestForm = () => {
     reason:      "",
   });
 
-  const [submitted, setSubmitted] = useState(false);
-  const [loading,   setLoading]   = useState(false);
-  const [apiError,  setApiError]  = useState<string | null>(null);
+  const [submitted,   setSubmitted]   = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [apiError,    setApiError]    = useState<string | null>(null);
+  const [timeTouched, setTimeTouched] = useState(false);
 
   const isValidDuration = toMinutes(form.endTime) > toMinutes(form.startTime);
 
@@ -367,23 +374,24 @@ const PermissionRequestForm = () => {
             <TimePicker
               label="02. Start Time"
               value={form.startTime}
-              onChange={(v) => setForm({ ...form, startTime: v })}
+              onChange={(v) => { setForm({ ...form, startTime: v }); setTimeTouched(true); }}
               minTotal={MIN_TOTAL}
               maxTotal={MAX_TOTAL}
             />
             <TimePicker
               label="03. End Time"
               value={form.endTime}
-              onChange={(v) => setForm({ ...form, endTime: v })}
+              onChange={(v) => { setForm({ ...form, endTime: v }); setTimeTouched(true); }}
               minTotal={MIN_TOTAL}
               maxTotal={MAX_TOTAL}
             />
           </div>
 
-          {/* Duration */}
+          {/* Duration — box always visible, time shown only after user selects */}
           <DurationDisplay
             startTime={form.startTime}
             endTime={form.endTime}
+            touched={timeTouched}
           />
 
           {/* 04. Attachments — NEW ─────────────────────────────── */}
