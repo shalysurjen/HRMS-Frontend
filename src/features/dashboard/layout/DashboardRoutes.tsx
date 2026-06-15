@@ -33,6 +33,7 @@ import AdminAppraisalCyclePage from "@/features/appraisal/pages/AdminAppraisalCy
 /* SELF APPRAISAL */
 import SelfAppraisalPage from "@/features/appraisal/pages/SelfAppraisalPage";
 import AppraisalDashboardPage from "@/features/appraisal/pages/AppraisalDashboardPage";
+import AppraisalEntryPage from "@/features/appraisal/pages/AppraisalEntryPage";
 
 /* LEAVE EXPORT */
 import LeaveExportPage from "@/features/leave/pages/LeaveExportPage";
@@ -88,7 +89,7 @@ const DashboardRoutes = () => {
       <Route path="policies"           element={<PolicyConfig />} />
 
       {/* ADMIN APPRAISAL CYCLE */}
-      <Route path="admin/appraisal-cycles" element={<AdminAppraisalCyclePage />} />
+      <Route path="appraisal-cycles" element={<AdminAppraisalCyclePage />} />
 
       {/* PAYROLL */}
       <Route path="payslip" element={<PayrollView />} />
@@ -110,7 +111,8 @@ const DashboardRoutes = () => {
       <Route path="birthday" element={<BirthdayPage />} />
 
       {/* SELF APPRAISAL */}
-      <Route path="self-appraisal"   element={<SelfAppraisalPage />} />
+      <Route path="self-appraisal"    element={<SelfAppraisalPage />} />
+      <Route path="appraisal-entry"   element={<AppraisalEntryPage />} />
       <Route path="appraisal-reviews" element={<AppraisalDashboardPage />} />
 
       {/* LEAVE EXPORT — Admin sees all employees, Manager sees team only */}

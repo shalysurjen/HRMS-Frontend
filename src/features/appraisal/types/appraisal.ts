@@ -97,6 +97,7 @@ export interface AppraisalDetail {
   l1ReviewedAt?: string;
   publishedAt?: string;
   overallAvgRating?: number;
+  combinedAvgRating?: number;  // (emp + L1) / 2  or  (emp + L1 + L2) / 3
   firstApproverId?: string;
   firstApproverName?: string;
   finalApproverId?: string;

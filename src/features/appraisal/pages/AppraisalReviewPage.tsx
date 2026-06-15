@@ -50,7 +50,8 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
       if (approverLevel === "L1" && d.status === "SUBMITTED") {
         appraisalService.markUnderReview(appraisalId, user.id).catch(() => {});
       }
-      if (approverLevel === "L2" && d.status === "L1_APPROVED") {
+      // Only call markL2UnderReview when there is an actual L2 (finalApproverId set)
+      if (approverLevel === "L2" && d.status === "L1_APPROVED" && d.finalApproverId) {
         appraisalService.markL2UnderReview(appraisalId, user.id)
           .then(() => loadDetail(appraisalId))
           .catch(() => {});
@@ -160,6 +161,12 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
       handleConfirm(false, false);
       return;
     }
+    // Sole approver publish path: they already filled remarks as L1 — skip L2 validation
+    if (!isActiveReviewer) {
+      setPendingAction({ approve, publish });
+      setStep("preview");
+      return;
+    }
     const missing = getMissingList();
     if (missing.length > 0) {
       setSubmitAttempted(true);
@@ -214,6 +221,8 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
   const totalSections = sections.length;
   const currentSec    = sections[currentSection];
 
+  const isSoleApprover = approverLevel === "L2" && !detail.finalApproverId;
+
   const isPublishedOrClosed = ["PUBLISHED", "CLOSED"].includes(detail.status);
 
   const L1_ACTIVE_STATUSES = ["SUBMITTED", "UNDER_REVIEW", "L1_APPROVED", "L2_REJECTED"];
@@ -226,7 +235,9 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
 
   const isViewOnly       = approverLevel === "VIEW_ONLY" || alreadyActed || isPublishedOrClosed;
   const l2CanEdit        = approverLevel === "L2" && L2_ACTIVE_STATUSES.includes(detail.status) && !submitted;
-  const canPublish       = approverLevel === "L2" && !isPublishedOrClosed && (submitted || detail.status === "FINAL_REVIEW");
+  // canPublish: either l2CanEdit flow saved a review (submitted=true), OR status=FINAL_REVIEW (sole approver landed here directly)
+  const canPublish       = approverLevel === "L2" && !isPublishedOrClosed
+                           && (l2CanEdit ? submitted : detail.status === "FINAL_REVIEW");
   const isActiveReviewer = (approverLevel === "L1" && !isViewOnly) || l2CanEdit;
   const allFilled        = getMissingList().length === 0;
   const isSuggestionSection = currentSec?.sectionName === SUGGESTION_SECTION;
@@ -285,13 +296,15 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
             ? "View Appraisal"
             : approverLevel === "L1"
             ? "Manager Review (L1)"
+            : isSoleApprover
+            ? "Review & Publish (Sole Approver)"
             : "Final Review (L2)"}
         </p>
         <StatusBadge status={detail.status} />
       </div>
 
-      {/* L1 already acted banner */}
-      {approverLevel === "L1" && alreadyActed && !isPublishedOrClosed && (
+      {/* L1 already acted banner — hide for sole approver who is now in L2/publish mode */}
+      {approverLevel === "L1" && alreadyActed && !isPublishedOrClosed && !isSoleApprover && (
         <div className="flex items-center gap-3 p-4 bg-teal-50 border border-teal-200 rounded-2xl">
           <HiOutlineCheckCircle size={20} className="text-teal-500 shrink-0" />
           <div>
@@ -308,7 +321,10 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
           <div>
             <p className="text-sm font-bold text-teal-800">Review saved</p>
             <p className="text-xs text-teal-600">
-              Click <strong>Preview & Publish</strong> to release results to the employee.
+              {isSoleApprover
+                ? "You're the sole approver. Click "
+                : "Click "}
+              <strong>Preview & Publish</strong> to release results to the employee.
             </p>
           </div>
         </div>
@@ -339,11 +355,24 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
       <EmployeeInfoCard detail={detail} />
 
       {detail.overallAvgRating != null && (
-        <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2 w-fit">
-          <span className="text-sm">📊</span>
-          <span className="text-xs font-bold text-indigo-700">
-            Overall Avg: {detail.overallAvgRating} / 5.0
-          </span>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2">
+            <span className="text-sm">📊</span>
+            <span className="text-xs font-bold text-indigo-700">
+              Self Avg: {detail.overallAvgRating} / 5.0
+            </span>
+          </div>
+          {detail.combinedAvgRating != null && (
+            <div className="flex items-center gap-2 bg-teal-50 border border-teal-200 rounded-xl px-4 py-2">
+              <span className="text-sm">🏆</span>
+              <span className="text-xs font-bold text-teal-700">
+                Combined Avg: {detail.combinedAvgRating} / 5.0
+                <span className="ml-1 font-normal text-teal-500">
+                  ({isSoleApprover ? "Emp + L1" : detail.finalApproverId ? "Emp + L1 + L2" : "Emp + L1"})
+                </span>
+              </span>
+            </div>
+          )}
         </div>
       )}
 
@@ -528,7 +557,7 @@ const AppraisalReviewPage = ({ appraisalId, approverLevel, onBack }: Props) => {
                     )}
 
                     {/* ── Row 3: L2 remark — PUBLISHED/CLOSED மட்டும் ── */}
-                    {isPublishedOrClosed && (l2Remark || l2Rating != null) && (
+                   {(isPublishedOrClosed || detail.status === "FINAL_REVIEW") && (l2Remark || l2Rating != null) && (
                       <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 space-y-2">
                         <p className="text-[10px] font-bold text-purple-500 uppercase tracking-wider">
                           Final Remark (L2)

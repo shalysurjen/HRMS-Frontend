@@ -1,6 +1,7 @@
 import logo from "@/assets/images/LogoWeHRM2.png";
 import CalendarSVG from "@/assets/svg/calendar-svg.svg";
 import moneySVG from "@/assets/svg/money-svg.svg";
+import { FaChartBar } from "react-icons/fa";
 import { useNotifications } from "@/features/notification/hooks/useNotification";
 import type { FlashNews } from "@/features/notification/types";
 import { useAuth } from "@/shared/auth/useAuth";
@@ -25,12 +26,15 @@ const LaunchPage: React.FC = () => {
 
   const userRole = user?.role;
   const basePathMap = {
-    EMPLOYEE: "/employee",
-    MANAGER: "/manager",
+    EMPLOYEE:    "/employee",
+    MANAGER:     "/manager",
     TEAM_LEADER: "/manager",
-    HR: "/hr",
-    ADMIN: "/admin",
-    CFO: "/admin",
+    HR:          "/hr",
+    ADMIN:       "/admin",
+    CFO:         "/cfo",
+    COO:         "/manager",
+    CEO:         "/manager",
+    CTO:         "/manager",
   };
 
   const basePath = basePathMap[userRole as keyof typeof basePathMap] || "/employee";
@@ -46,12 +50,12 @@ const LaunchPage: React.FC = () => {
     return date.toLocaleDateString();
   };
 
-  const handleNavigate = (path: string) => {
-    navigate(`${basePath}/${path}`);
-  };
+  // const handleNavigate = (path: string) => {
+  //   navigate(`${basePath}/${path}`);
+  // };
 
   const goToProfile = () => {
-    handleNavigate("/profile");
+    navigate("/profile");
     setIsProfileOpen(false);
   };
 
@@ -94,6 +98,11 @@ const LaunchPage: React.FC = () => {
     return () => clearInterval(timer);
   }, [flashNews]);
 
+  // COO only → appraisal reviews dashboard; everyone else → self-appraisal
+  const appraisalPath = userRole === "COO"
+    ? `${basePath}/appraisal-reviews`
+    : `${basePath}/self-appraisal`;
+
   const systems = [
     {
       title: "Leave System",
@@ -101,6 +110,7 @@ const LaunchPage: React.FC = () => {
       icon: CalendarSVG,
       color: "bg-brand/10",
       path: `${basePath}/dashboard`,
+      iconType: "img" as const,
     },
     {
       title: "Payroll System",
@@ -108,6 +118,15 @@ const LaunchPage: React.FC = () => {
       icon: moneySVG,
       color: "bg-emerald-500/10",
       path: `${basePath}/dashboard`,
+      iconType: "img" as const,
+    },
+    {
+      title: "Appraisal System",
+      desc: "View and manage performance appraisals, ratings, and feedback.",
+      icon: null,
+      color: "bg-violet-500/10",
+      path: appraisalPath,
+      iconType: "component" as const,
     },
   ];
 useEffect(() => {
@@ -337,7 +356,11 @@ useEffect(() => {
               >
                 <div className="absolute top-0 right-0 w-24 h-24 bg-brand/5 rounded-bl-full translate-x-10 -translate-y-10 group-hover:translate-x-0 group-hover:translate-y-0 transition-transform duration-500" />
                 <div className={`${sys.color} w-14 h-14 rounded-2xl flex items-center justify-center mb-6`}>
-                  <img src={sys.icon} className="w-8 h-8" alt={sys.title} />
+                  {sys.iconType === "img" ? (
+                    <img src={sys.icon!} className="w-8 h-8" alt={sys.title} />
+                  ) : (
+                    <FaChartBar className="w-8 h-8 text-violet-500" style={{ width: 32, height: 32 }} />
+                  )}
                 </div>
                 <h3 className="text-2xl font-black mb-2 text-slate-800 group-hover:text-brand transition-colors">{sys.title}</h3>
                 <p className="text-slate-500 text-sm leading-relaxed font-medium">{sys.desc}</p>

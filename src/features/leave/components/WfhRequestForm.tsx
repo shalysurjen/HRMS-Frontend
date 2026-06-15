@@ -116,6 +116,7 @@ const WfhRequestForm: React.FC = () => {
     attachment: null,
   });
 
+  const [isSingleDay, setIsSingleDay] = useState(false);
   const [totalTaken, setTotalTaken] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,12 +137,16 @@ const WfhRequestForm: React.FC = () => {
     formData.endDateHalfDayType
   );
 
-
   const handleStartDateChange = (date: Date | null) => {
     setFormData((prev) => ({
       ...prev,
       startDate: date,
-      endDate: date && prev.endDate && prev.endDate < date ? null : prev.endDate,
+      // if single-day mode, keep endDate in sync with startDate
+      endDate: isSingleDay
+        ? date
+        : date && prev.endDate && prev.endDate < date
+        ? null
+        : prev.endDate,
       startDateHalfDayType: null,
       endDateHalfDayType: null,
     }));
@@ -149,6 +154,21 @@ const WfhRequestForm: React.FC = () => {
 
   const handleEndDateChange = (date: Date | null) => {
     setFormData((prev) => ({ ...prev, endDate: date, endDateHalfDayType: null }));
+  };
+
+  const handleSingleDayToggle = (checked: boolean) => {
+    setIsSingleDay(checked);
+    if (checked) {
+      // Lock end date to start date
+      setFormData((prev) => ({
+        ...prev,
+        endDate: prev.startDate,
+        endDateHalfDayType: null,
+      }));
+    } else {
+      // Free end date — clear it so user must re-pick
+      setFormData((prev) => ({ ...prev, endDate: null, endDateHalfDayType: null }));
+    }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -200,7 +220,15 @@ const WfhRequestForm: React.FC = () => {
         <button
           onClick={() => {
             setSubmitted(false);
-            setFormData({ startDate: null, endDate: null, startDateHalfDayType: null, endDateHalfDayType: null, reason: "", attachment: null });
+            setIsSingleDay(false);
+            setFormData({
+              startDate: null,
+              endDate: null,
+              startDateHalfDayType: null,
+              endDateHalfDayType: null,
+              reason: "",
+              attachment: null,
+            });
           }}
           className="mt-8 text-[11px] font-black uppercase tracking-[0.2em] text-indigo-600 hover:text-indigo-800 transition-all"
         >
@@ -227,7 +255,6 @@ const WfhRequestForm: React.FC = () => {
         </div>
 
         <div className="flex flex-col items-start sm:items-end gap-2">
-          {/* Total taken pill */}
           <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm">
             <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Taken</span>
             <span className="text-sm font-black text-indigo-600">
@@ -236,13 +263,6 @@ const WfhRequestForm: React.FC = () => {
                 {totalTaken === 1 ? "day" : "days"}
               </span>
             </span>
-          </div>
-          {/* Approval workflow badges */}
-          <div className="flex flex-col items-end gap-1">
-            {/* <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Approval Workflow
-            </span>
-            <div className="flex flex-wrap gap-2">{renderApprovers()}</div> */}
           </div>
         </div>
       </div>
@@ -260,44 +280,64 @@ const WfhRequestForm: React.FC = () => {
         </div>
 
         {/* ── Date pickers ─────────────────────────────────────── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-3">
-            <MyDatePicker
-              label="WFH Starts On"
-              selected={formData.startDate}
-              onChange={handleStartDateChange}
-              minDate={getMinAllowedDate()}
-              
-              required
-            />
-            {formData.startDate && (
-              <HalfDaySelector
-                label="Start Day Session (optional)"
-                value={formData.startDateHalfDayType}
-                onChange={(v) => setFormData((p) => ({ ...p, startDateHalfDayType: v }))}
+        <div className="space-y-4">
+
+          {/* Start date row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <MyDatePicker
+                label="WFH Starts On"
+                selected={formData.startDate}
+                onChange={handleStartDateChange}
+                minDate={getMinAllowedDate()}
+                required
               />
+              {formData.startDate && (
+                <HalfDaySelector
+                  label="Start Day Session (optional)"
+                  value={formData.startDateHalfDayType}
+                  onChange={(v) => setFormData((p) => ({ ...p, startDateHalfDayType: v }))}
+                />
+              )}
+            </div>
+
+            {/* End date — hidden when single-day checked */}
+            {!isSingleDay && (
+              <div className="space-y-3">
+                <MyDatePicker
+                  label="WFH Ends On"
+                  selected={formData.endDate}
+                  onChange={handleEndDateChange}
+                  minDate={formData.startDate ?? getMinAllowedDate()}
+                  required
+                />
+                {formData.endDate &&
+                  formData.startDate &&
+                  formData.endDate.toDateString() !== formData.startDate.toDateString() && (
+                    <HalfDaySelector
+                      label="End Day Session (optional)"
+                      value={formData.endDateHalfDayType}
+                      onChange={(v) => setFormData((p) => ({ ...p, endDateHalfDayType: v }))}
+                    />
+                  )}
+              </div>
             )}
           </div>
 
-          <div className="space-y-3">
-            <MyDatePicker
-              label="WFH Ends On"
-              selected={formData.endDate}
-              onChange={handleEndDateChange}
-              minDate={formData.startDate ?? getMinAllowedDate()}
-              
-              required
-            />
-            {formData.endDate &&
-              formData.startDate &&
-              formData.endDate.toDateString() !== formData.startDate.toDateString() && (
-                <HalfDaySelector
-                  label="End Day Session (optional)"
-                  value={formData.endDateHalfDayType}
-                  onChange={(v) => setFormData((p) => ({ ...p, endDateHalfDayType: v }))}
-                />
-              )}
-          </div>
+          {/* Single-day checkbox — show only after start date is picked */}
+          {formData.startDate && (
+            <label className="flex items-center gap-2.5 cursor-pointer w-fit select-none">
+              <input
+                type="checkbox"
+                checked={isSingleDay}
+                onChange={(e) => handleSingleDayToggle(e.target.checked)}
+                className="w-4 h-4 rounded accent-indigo-600 cursor-pointer"
+              />
+              <span className="text-xs font-semibold text-slate-600">
+                This is a single-day application
+              </span>
+            </label>
+          )}
         </div>
 
         {/* ── Reason ───────────────────────────────────────────── */}
@@ -308,14 +348,12 @@ const WfhRequestForm: React.FC = () => {
           </label>
           <textarea
             rows={4}
-            maxLength={500}
             className="w-full border border-slate-200 bg-slate-50 p-4 rounded-xl text-xs font-bold uppercase outline-none focus:border-indigo-600 focus:bg-white transition-all placeholder:text-slate-300 resize-none"
             placeholder="E.G. HOME INTERNET MAINTENANCE, PERSONAL COMMITMENT, HEALTH CONCERN, OR FOCUSED DEEP WORK SESSION..."
             value={formData.reason}
             onChange={(e) => setFormData((p) => ({ ...p, reason: e.target.value }))}
             required
           />
-          <p className="text-[10px] text-slate-400 text-right">{formData.reason.length}/500</p>
         </div>
 
         {/* ── Attachment ───────────────────────────────────────── */}

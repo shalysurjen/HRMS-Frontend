@@ -408,8 +408,8 @@ const WfhDetailModal: React.FC<WfhDetailModalProps> = ({ isOpen, req, onClose, o
                 <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest">
                   Reason for Leave
                 </p>
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 min-h-[96px] h-full">
-                  <p className="text-sm text-slate-700 leading-relaxed italic whitespace-pre-wrap">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 min-h-[96px] max-h-60 overflow-y-auto">
+                  <p className="text-sm text-slate-700 leading-relaxed italic whitespace-pre-wrap break-words">
                     {req.reason ? `"${req.reason}"` : <span className="not-italic text-slate-400">No reason provided.</span>}
                   </p>
                 </div>
