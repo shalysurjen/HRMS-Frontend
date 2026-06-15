@@ -40,7 +40,13 @@ const AttendanceReports: React.FC = () => {
     const { user } = useAuth();
     const isAdmin = user?.role === "ADMIN";
     const isCfo   = user?.role === "CFO";
-    const isManager = !isAdmin && !isCfo;
+    const isCeo   = user?.role === "CEO";
+    const isCoo   = user?.role === "COO";
+
+    // Roles that see ALL employees
+    const canSeeAllEmployees = isAdmin || isCfo || isCeo || isCoo;
+    // Roles that see only their direct team (CTO, MANAGER, TEAM_LEADER, HR, etc.)
+    const isManager = !canSeeAllEmployees;
 
     const [activeTab, setActiveTab] = useState<ActiveTab>("detailed");
     const [dateRange, setDateRange] = useState({
@@ -62,6 +68,7 @@ const AttendanceReports: React.FC = () => {
     const [selectedEmployeeName, setSelectedEmployeeName] = useState<string>("");
     const [activePunches,        setActivePunches]        = useState<{ time: string; type: string }[] | null>(null);
     const [selectedIds,          setSelectedIds]          = useState<string[]>([]);
+    const [exportWarning,        setExportWarning]        = useState(false);
     const [page,                 setPage]                 = useState(0);
     const [listTotalPages,       setListTotalPages]       = useState(0);
     const SIZE = 10;
@@ -74,9 +81,9 @@ const AttendanceReports: React.FC = () => {
     const [detailedTotalPages, setDetailedTotalPages] = useState(0);
     const [detailedLoading,    setDetailedLoading]    = useState(false);
 
-    // ── Load employees (Admin / CFO) ──────────────────────────────
+    // ── Load employees (Admin / COO / CFO / CEO) ─────────────────
     useEffect(() => {
-        if (!isAdmin && !isCfo) return;
+        if (!canSeeAllEmployees) return;
         const load = async () => {
             try {
                 const result = await getEmployees({ page: 0, size: 200 });
@@ -87,7 +94,7 @@ const AttendanceReports: React.FC = () => {
             } catch (err) { console.error("Failed to fetch employees", err); }
         };
         load();
-    }, [isAdmin, isCfo, getEmployees]);
+    }, [canSeeAllEmployees, getEmployees]);
 
     // ── Load team members (Manager) ───────────────────────────────
     useEffect(() => {
@@ -169,19 +176,14 @@ const AttendanceReports: React.FC = () => {
     };
 
     // Employee name filter applied to list
+    // Both canSeeAllEmployees (getEmployees) and isManager (getTeamMembers) populate
+    // the `employees` state with unique records — use it directly.
     const filteredEmployees = useMemo(() => {
-        const base = (isAdmin || isCfo)
-            ? employees
-            : (teamAttendanceReport || []).map((r: any) => ({
-                empId: r.employeeId,
-                name:  r.employeeName,
-            })) as EmployeeEntity[];
-
-        if (!empNameFilter.trim()) return base;
-        return base.filter((e) =>
+        if (!empNameFilter.trim()) return employees;
+        return employees.filter((e) =>
             e.name.toLowerCase().includes(empNameFilter.trim().toLowerCase())
         );
-    }, [employees, teamAttendanceReport, isAdmin, isCfo, empNameFilter]);
+    }, [employees, empNameFilter]);
 
     const toggleEmployee  = (empId: string) =>
         setSelectedIds((prev) =>
@@ -196,15 +198,18 @@ const AttendanceReports: React.FC = () => {
         try {
             if (selectedEmployeeId) {
                 // Individual employee detail view — use existing single-employee export
+                setExportWarning(false);
                 await attendanceService.downloadDetailedAttendance(selectedEmployeeId, { fromDate: dateRange.from, toDate: dateRange.to });
             } else {
-                // List view — use new bulk detailed export (new 15-column format)
-                // If specific employees are checked use those, otherwise export all
-                const ids = selectedIds.length > 0
-                    ? selectedIds
-                    : employees.map((e) => e.empId);
+                // List view — must have at least one employee selected
+                if (selectedIds.length === 0) {
+                    setExportWarning(true);
+                    setTimeout(() => setExportWarning(false), 5000);
+                    return;
+                }
+                setExportWarning(false);
                 await attendanceService.downloadBulkDetailedAttendance({
-                    empIds:   ids,
+                    empIds:   selectedIds,
                     fromDate: dateRange.from,
                     toDate:   dateRange.to,
                 });
@@ -240,12 +245,19 @@ const AttendanceReports: React.FC = () => {
                         </div>
                     </div>
                     {activeTab !== "leave" && (
-                        <button
-                            onClick={handleDetailedExport}
-                            className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 flex items-center gap-2 shadow-sm shadow-indigo-200 transition-all active:scale-95"
-                        >
-                            <FaFileExport size={14} /> Export Report
-                        </button>
+                        <div className="flex flex-col items-end gap-1">
+                            {exportWarning && (
+                                <span className="text-xs text-red-700 font-semibold bg-red-50 border border-red-200 px-3 py-1 rounded-md">
+                                    ⚠ Please select at least one employee to export.
+                                </span>
+                            )}
+                            <button
+                                onClick={handleDetailedExport}
+                                className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 flex items-center gap-2 shadow-sm shadow-indigo-200 transition-all active:scale-95"
+                            >
+                                <FaFileExport size={14} /> Export Report
+                            </button>
+                        </div>
                     )}
                 </div>
 
@@ -311,7 +323,7 @@ const AttendanceReports: React.FC = () => {
                                 <table className="w-full text-left border-collapse">
                                     <thead className="bg-slate-50/50">
                                         <tr className="border-b border-slate-200">
-                                            {(isAdmin || isCfo) && (
+                                            {canSeeAllEmployees && (
                                                 <th className="px-6 py-4 w-10">
                                                     <input
                                                         type="checkbox"
@@ -331,7 +343,7 @@ const AttendanceReports: React.FC = () => {
                                                 className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
                                                 onClick={() => { setSelectedEmployeeId(row.empId); setPage(0); }}
                                             >
-                                                {(isAdmin || isCfo) && (
+                                                {canSeeAllEmployees && (
                                                     <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                                                         <input
                                                             type="checkbox"
